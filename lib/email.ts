@@ -13,7 +13,10 @@ export async function sendInviteCodeEmail({
   inviteCode: string
   creatorName: string
 }) {
-  const { error } = await resend.emails.send({
+  console.log("[v0] Attempting to send invite email to:", to, "for group:", groupName)
+  console.log("[v0] RESEND_API_KEY present:", !!process.env.RESEND_API_KEY)
+
+  const { data, error } = await resend.emails.send({
     from: "Grid Prophet <onboarding@resend.dev>",
     to,
     subject: `Your Grid Prophet League: ${groupName}`,
@@ -42,7 +45,9 @@ export async function sendInviteCodeEmail({
   })
 
   if (error) {
-    console.error("Failed to send invite email:", error)
+    console.error("[v0] Failed to send invite email:", JSON.stringify(error))
     throw new Error(`Failed to send email: ${error.message}`)
   }
+
+  console.log("[v0] Email sent successfully! ID:", data?.id)
 }
