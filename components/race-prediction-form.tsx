@@ -57,6 +57,7 @@ export function RacePredictionForm({
       : []
   )
   const [saving, setSaving] = useState(false)
+  const [selectKey, setSelectKey] = useState(0)
 
   const availableDrivers = drivers.filter(
     (d) => !selectedDrivers.includes(d.id)
@@ -66,7 +67,9 @@ export function RacePredictionForm({
 
   function addDriver(driverId: string) {
     if (selectedDrivers.length >= 10) return
+    if (selectedDrivers.includes(driverId)) return
     setSelectedDrivers((prev) => [...prev, driverId])
+    setSelectKey((k) => k + 1)
   }
 
   function removeDriver(driverId: string) {
@@ -163,19 +166,13 @@ export function RacePredictionForm({
             onValueChange={setPolePrediction}
             disabled={isLocked}
           >
-            <SelectTrigger className="w-full sm:w-72">
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Select pole sitter..." />
             </SelectTrigger>
             <SelectContent>
               {drivers.map((d) => (
                 <SelectItem key={d.id} value={d.id}>
-                  <span className="font-mono text-xs text-muted-foreground mr-2">
-                    {d.short_name}
-                  </span>
-                  {d.name} {d.surname}
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {d.team_name}
-                  </span>
+                  {d.short_name} - {d.name} {d.surname} ({d.team_name})
                 </SelectItem>
               ))}
             </SelectContent>
@@ -284,8 +281,8 @@ export function RacePredictionForm({
 
           {/* Add driver selector */}
           {!isLocked && selectedDrivers.length < 10 && (
-            <Select onValueChange={addDriver}>
-              <SelectTrigger className="w-full sm:w-72">
+            <Select key={selectKey} onValueChange={addDriver} value="">
+              <SelectTrigger className="w-full">
                 <SelectValue
                   placeholder={`Add ${positionLabels[selectedDrivers.length]} driver...`}
                 />
@@ -293,13 +290,7 @@ export function RacePredictionForm({
               <SelectContent>
                 {availableDrivers.map((d) => (
                   <SelectItem key={d.id} value={d.id}>
-                    <span className="font-mono text-xs text-muted-foreground mr-2">
-                      {d.short_name}
-                    </span>
-                    {d.name} {d.surname}
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {d.team_name}
-                    </span>
+                    {d.short_name} - {d.name} {d.surname} ({d.team_name})
                   </SelectItem>
                 ))}
               </SelectContent>
