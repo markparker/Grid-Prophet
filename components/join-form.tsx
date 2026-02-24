@@ -69,6 +69,14 @@ export function JoinForm() {
       return
     }
 
+    const email = (form.get("email") as string).trim()
+
+    if (!email) {
+      toast.error("Please enter your email to receive the invite code")
+      setLoading(false)
+      return
+    }
+
     try {
       const res = await fetch("/api/groups", {
         method: "POST",
@@ -77,6 +85,7 @@ export function JoinForm() {
           action: "create",
           name: groupName,
           playerName,
+          email,
         }),
       })
       const data = await res.json()
@@ -85,9 +94,13 @@ export function JoinForm() {
         setLoading(false)
         return
       }
-      toast.success(
-        `Group created! Invite code: ${data.group.invite_code}`
-      )
+      if (data.emailSent) {
+        toast.success(`Group created! Invite code sent to ${email}`)
+      } else {
+        toast.success(
+          `Group created! Invite code: ${data.group.invite_code} (email could not be sent)`
+        )
+      }
       router.push("/dashboard")
     } catch {
       toast.error("Something went wrong")
@@ -159,6 +172,19 @@ export function JoinForm() {
                   placeholder="e.g., Lewis"
                   required
                 />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="create-email">Your Email</Label>
+                <Input
+                  id="create-email"
+                  name="email"
+                  type="email"
+                  placeholder="e.g., lewis@example.com"
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  The invite code will be emailed to you.
+                </p>
               </div>
               <Button type="submit" disabled={loading} className="w-full">
                 {loading ? "Creating..." : "Create League"}

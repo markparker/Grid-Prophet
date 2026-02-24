@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { setSession } from "@/lib/session"
+import { sendInviteCodeEmail } from "@/lib/email"
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { action, name, inviteCode, playerName } = body
+  const { action, name, inviteCode, playerName, email } = body
 
   const supabase = await createClient()
 
   if (action === "create") {
     if (!name || !playerName) {
       return NextResponse.json({ error: "Group name and player name are required" }, { status: 400 })
+    }
+
+    if (!email) {
+      return NextResponse.json({ error: "Email is required to receive the invite code" }, { status: 400 })
     }
 
     const code = inviteCode || Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -42,7 +47,21 @@ export async function POST(request: NextRequest) {
       groupName: group.name,
     })
 
-    return NextResponse.json({ group, player })
+    // Send invite code email (non-blocking -- don't fail group creation if email fails)
+    let emailSent = false
+    try {
+      await sendInviteCodeEmail({
+        to: email,
+        groupName: group.name,
+        inviteCode: group.invite_code,
+        creatorName: player.name,
+      })
+      emailSent = true
+    } catch (emailError) {
+      console.error("Email send failed, group still created:", emailError)
+    }
+
+    return NextResponse.json({ group, player, emailSent })
   }
 
   if (action === "join") {
