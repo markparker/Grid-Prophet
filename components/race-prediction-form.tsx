@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
-import { GripVertical, X, Lock } from "lucide-react"
+import { X, Lock } from "lucide-react"
 
 interface Driver {
   id: string

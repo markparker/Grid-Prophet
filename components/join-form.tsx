@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,7 +15,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 
 export function JoinForm() {
-  const router = useRouter()
   const [loading, setLoading] = useState(false)
 
   async function handleJoin(e: React.FormEvent<HTMLFormElement>) {
@@ -49,7 +47,7 @@ export function JoinForm() {
         return
       }
       toast.success(`Joined ${data.group.name}!`)
-      router.push("/dashboard")
+      window.location.href = "/dashboard"
     } catch {
       toast.error("Something went wrong")
       setLoading(false)
@@ -101,7 +99,7 @@ export function JoinForm() {
           `Group created! Invite code: ${data.group.invite_code} (email could not be sent)`
         )
       }
-      router.push("/dashboard")
+      window.location.href = "/dashboard"
     } catch {
       toast.error("Something went wrong")
       setLoading(false)
