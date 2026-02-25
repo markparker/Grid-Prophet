@@ -14,7 +14,7 @@ export async function sendInviteCodeEmail({
   creatorName: string
 }) {
   const { data, error } = await resend.emails.send({
-    from: "Grid Prophet <onboarding@resend.dev>",
+    from: "Grid Prophet <noreply@gridprophets.com>",
     to,
     subject: `Your Grid Prophet League: ${groupName}`,
     html: `
