@@ -5,7 +5,7 @@ import { sendInviteCodeEmail } from "@/lib/email"
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { action, name, inviteCode, playerName, email } = body
+  const { action, name, inviteCode, playerName, email, googleId } = body
 
   const supabase = await createClient()
 
@@ -30,9 +30,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: groupError.message }, { status: 500 })
     }
 
+    const playerInsert: Record<string, string> = { group_id: group.id, name: playerName }
+    if (googleId) playerInsert.google_id = googleId
+    if (email) playerInsert.email = email
+
     const { data: player, error: playerError } = await supabase
       .from("players")
-      .insert({ group_id: group.id, name: playerName })
+      .insert(playerInsert)
       .select()
       .single()
 
@@ -97,9 +101,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ group, player: existingPlayer })
     }
 
+    const joinInsert: Record<string, string> = { group_id: group.id, name: playerName }
+    if (googleId) joinInsert.google_id = googleId
+    if (email) joinInsert.email = email
+
     const { data: player, error: playerError } = await supabase
       .from("players")
-      .insert({ group_id: group.id, name: playerName })
+      .insert(joinInsert)
       .select()
       .single()
 

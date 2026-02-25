@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { getSession } from "@/lib/session"
 import { JoinForm } from "@/components/join-form"
@@ -25,7 +26,9 @@ export default async function LandingPage() {
             Championship with your friends.
           </p>
         </div>
-        <JoinForm />
+        <Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-card" />}>
+          <JoinForm />
+        </Suspense>
       </div>
     </div>
   )
