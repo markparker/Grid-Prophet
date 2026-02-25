@@ -139,12 +139,16 @@ export function JoinForm() {
           `League created! Invite code: ${data.group.invite_code} (email could not be sent)`
         )
       }
+      console.log("[v0] Create success, invite_code:", data.group.invite_code, "group name:", data.group.name)
       const shareParams = new URLSearchParams({
         code: data.group.invite_code,
         name: data.group.name,
       })
-      window.location.href = `/share?${shareParams.toString()}`
-    } catch {
+      const shareUrl = `/share?${shareParams.toString()}`
+      console.log("[v0] Redirecting to share page:", shareUrl)
+      window.location.href = shareUrl
+    } catch (err) {
+      console.error("[v0] Create league error:", err)
       toast.error("Something went wrong")
       setLoading(false)
     }

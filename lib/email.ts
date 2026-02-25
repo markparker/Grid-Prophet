@@ -2,6 +2,8 @@ import { Resend } from "resend"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://gridprophets.com"
+
 export async function sendInviteCodeEmail({
   to,
   groupName,
@@ -13,6 +15,16 @@ export async function sendInviteCodeEmail({
   inviteCode: string
   creatorName: string
 }) {
+  const shareMessage = encodeURIComponent(
+    `Join my F1 prediction league "${groupName}" on Grid Prophet! Use invite code: ${inviteCode}\n${APP_URL}`
+  )
+  const emailSubject = encodeURIComponent(
+    `Join my F1 prediction league: ${groupName}`
+  )
+  const emailBody = encodeURIComponent(
+    `Join my F1 prediction league "${groupName}" on Grid Prophet!\n\nUse invite code: ${inviteCode}\n\nJoin here: ${APP_URL}`
+  )
+
   const { data, error } = await resend.emails.send({
     from: "Grid Prophet <noreply@gridprophets.com>",
     to,
@@ -30,9 +42,37 @@ export async function sendInviteCodeEmail({
             <span style="font-family: 'Courier New', monospace; font-size: 32px; font-weight: bold; color: #e11d48; letter-spacing: 4px;">${inviteCode}</span>
           </div>
         </div>
-        <p style="color: #a1a1aa; font-size: 14px; line-height: 1.5; text-align: center;">
+        <p style="color: #a1a1aa; font-size: 14px; line-height: 1.5; text-align: center; margin-bottom: 20px;">
           Share this code with your friends so they can join your league. Created by <strong style="color: #fafafa;">${creatorName}</strong>.
         </p>
+
+        <!-- Share Buttons -->
+        <div style="text-align: center; margin-bottom: 24px;">
+          <p style="color: #a1a1aa; font-size: 13px; margin: 0 0 12px 0;">Share with friends:</p>
+          <div>
+            <!--[if mso]>
+            <table role="presentation" border="0" cellspacing="0" cellpadding="0" align="center"><tr>
+            <td style="padding: 0 4px;">
+            <![endif]-->
+            <a href="https://wa.me/?text=${shareMessage}" target="_blank" style="display: inline-block; background: #25D366; color: #ffffff; font-size: 13px; font-weight: 600; text-decoration: none; padding: 10px 16px; border-radius: 6px; margin: 4px;">WhatsApp</a>
+            <!--[if mso]>
+            </td><td style="padding: 0 4px;">
+            <![endif]-->
+            <a href="https://twitter.com/intent/tweet?text=${shareMessage}" target="_blank" style="display: inline-block; background: #27272a; color: #fafafa; font-size: 13px; font-weight: 600; text-decoration: none; padding: 10px 16px; border-radius: 6px; margin: 4px;">X / Twitter</a>
+            <!--[if mso]>
+            </td><td style="padding: 0 4px;">
+            <![endif]-->
+            <a href="mailto:?subject=${emailSubject}&body=${emailBody}" style="display: inline-block; background: #27272a; color: #fafafa; font-size: 13px; font-weight: 600; text-decoration: none; padding: 10px 16px; border-radius: 6px; margin: 4px;">Email</a>
+            <!--[if mso]>
+            </td><td style="padding: 0 4px;">
+            <![endif]-->
+            <a href="sms:?&body=${shareMessage}" style="display: inline-block; background: #27272a; color: #fafafa; font-size: 13px; font-weight: 600; text-decoration: none; padding: 10px 16px; border-radius: 6px; margin: 4px;">Text</a>
+            <!--[if mso]>
+            </td></tr></table>
+            <![endif]-->
+          </div>
+        </div>
+
         <hr style="border: none; border-top: 1px solid #27272a; margin: 24px 0;" />
         <p style="color: #71717a; font-size: 12px; text-align: center; margin: 0;">
           Predict pole positions, race results &amp; the World Drivers&apos; Championship.
