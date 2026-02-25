@@ -84,7 +84,7 @@ export function JoinForm() {
         setLoading(false)
         return
       }
-      toast.success(`Joined ${data.group.name}!`)
+      toast.success(`Joined league: ${data.group.name}!`)
       window.location.href = "/dashboard"
     } catch {
       toast.error("Something went wrong")
