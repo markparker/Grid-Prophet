@@ -58,7 +58,7 @@ export function WdcPredictionForm({
     if (sortedExisting.length === drivers.length) {
       return sortedExisting.map((p) => p.driver_id)
     }
-    if (hasLiveData) {
+    if (hasLiveData && currentStandings.length > 0) {
       return currentStandings.map((s) => s.driver_id)
     }
     return drivers.map((d) => d.id)
@@ -116,24 +116,26 @@ export function WdcPredictionForm({
     [dragIndex]
   )
 
-  const handleMove = useCallback((index: number, direction: "up" | "down") => {
-    if (isLocked) return
-    setOrder((prev) => {
-      const next = [...prev]
-      const target = direction === "up" ? index - 1 : index + 1
-      if (target < 0 || target >= next.length) return prev
-      ;[next[index], next[target]] = [next[target], next[index]]
-      return next
-    })
-  }, [isLocked])
+  const handleMove = useCallback(
+    (index: number, direction: "up" | "down") => {
+      if (isLocked) return
+      setOrder((prev) => {
+        const next = [...prev]
+        const target = direction === "up" ? index - 1 : index + 1
+        if (target < 0 || target >= next.length) return prev
+        ;[next[index], next[target]] = [next[target], next[index]]
+        return next
+      })
+    },
+    [isLocked]
+  )
 
-  // Build a map from driver_id -> live position for delta indicators
   const livePositionMap = new Map(currentStandings.map((s) => [s.driver_id, s.position]))
-  const livePointsMap = new Map(currentStandings.map((s) => [s.driver_id, s.points]))
+  const predictionPositionMap = new Map(order.map((id, i) => [id, i + 1]))
 
   async function handleSubmit() {
     if (isLocked) {
-      toast.error("WDC predictions are locked")
+      toast.error("WDC predictions are locked — the season has started")
       return
     }
     if (order.length !== drivers.length) {
@@ -164,12 +166,9 @@ export function WdcPredictionForm({
     setSaving(false)
   }
 
-  // Compare prediction vs live -- how many spots off is each prediction?
-  const predictionPositionMap = new Map(order.map((id, i) => [id, i + 1]))
-
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      {/* Your Prediction */}
+      {/* Prediction panel */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -178,7 +177,10 @@ export function WdcPredictionForm({
               Your Prediction
             </CardTitle>
             {isLocked ? (
-              <Badge variant="secondary" className="gap-1 text-destructive border-destructive/30 bg-destructive/10">
+              <Badge
+                variant="secondary"
+                className="gap-1 border-destructive/30 bg-destructive/10 text-destructive"
+              >
                 <Lock className="h-3 w-3" />
                 Locked
               </Badge>
@@ -188,118 +190,143 @@ export function WdcPredictionForm({
               </Badge>
             )}
           </div>
-          {isLocked && existingPrediction && (
-            <CardDescription>
-              Your pre-season prediction. Compare with the live standings on the right.
-            </CardDescription>
-          )}
-          {isLocked && !existingPrediction && (
-            <CardDescription className="text-destructive/80">
-              You did not submit a WDC prediction before the season started.
-            </CardDescription>
-          )}
+          <CardDescription>
+            {isLocked
+              ? existingPrediction
+                ? "Your pre-season prediction is locked. Compare with the live standings."
+                : "The season has started — predictions are locked and cannot be submitted."
+              : "Drag drivers to set your predicted final championship order."}
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          {isLocked && !existingPrediction ? (
-            <div className="flex flex-col items-center gap-2 py-8 text-center">
-              <Lock className="h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">No prediction was submitted.</p>
-            </div>
-          ) : (
-            <>
-              <div className="flex flex-col gap-1">
-                {order.map((driverId, index) => {
-                  const driver = driverMap.get(driverId)
-                  if (!driver) return null
-                  const isDragging = dragIndex === index
-                  const isDragOver = dragOverIndex === index && dragIndex !== index
-                  const livePos = livePositionMap.get(driverId)
-                  const predPos = index + 1
-                  const delta = livePos != null ? predPos - livePos : null
 
-                  return (
-                    <div
-                      key={driverId}
-                      draggable={!isLocked}
-                      onDragStart={(e) => handleDragStart(e, index)}
-                      onDragEnd={handleDragEnd}
-                      onDragOver={(e) => handleDragOver(e, index)}
-                      onDrop={(e) => handleDrop(e, index)}
-                      onDragLeave={() => setDragOverIndex(null)}
+        <CardContent>
+          {/* Show the driver list always — locked or not, prediction or no prediction */}
+          <div className="flex flex-col gap-1">
+            {order.map((driverId, index) => {
+              const driver = driverMap.get(driverId)
+              if (!driver) return null
+
+              const isDragging = dragIndex === index
+              const isDragOver = dragOverIndex === index && dragIndex !== index
+              const livePos = livePositionMap.get(driverId)
+              const predPos = index + 1
+              const delta = livePos != null ? predPos - livePos : null
+
+              return (
+                <div
+                  key={driverId}
+                  draggable={!isLocked}
+                  onDragStart={(e) => handleDragStart(e, index)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDrop={(e) => handleDrop(e, index)}
+                  onDragLeave={() => setDragOverIndex(null)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-md border px-2 py-1.5 transition-all select-none",
+                    !isLocked && "cursor-grab active:cursor-grabbing",
+                    isLocked && "opacity-90",
+                    isDragging
+                      ? "border-primary/40 bg-primary/5 opacity-40"
+                      : isDragOver
+                      ? "border-primary bg-primary/10 scale-[1.01]"
+                      : "border-border bg-secondary/30 hover:bg-secondary/50"
+                  )}
+                >
+                  {!isLocked && (
+                    <GripVertical className="h-4 w-4 flex-shrink-0 text-muted-foreground/40" />
+                  )}
+                  {isLocked && (
+                    <Lock className="h-3 w-3 flex-shrink-0 text-muted-foreground/30" />
+                  )}
+                  <span
+                    className={cn(
+                      "flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[10px] font-bold",
+                      index === 0
+                        ? "bg-primary text-primary-foreground"
+                        : index <= 2
+                        ? "bg-primary/20 text-primary"
+                        : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    {index + 1}
+                  </span>
+                  <span className="w-7 flex-shrink-0 font-mono text-[10px] text-muted-foreground">
+                    {driver.short_name}
+                  </span>
+                  <span className="flex-1 truncate text-xs font-medium">
+                    {driver.name} {driver.surname}
+                  </span>
+
+                  {/* Live delta vs prediction */}
+                  {isLocked && hasLiveData && delta !== null && (
+                    <span
                       className={cn(
-                        "flex items-center gap-2 rounded-md border px-2 py-1.5 transition-all select-none",
-                        !isLocked && "cursor-grab active:cursor-grabbing",
-                        isDragging ? "border-primary/40 bg-primary/5 opacity-40"
-                          : isDragOver ? "border-primary bg-primary/10 scale-[1.01]"
-                          : "border-border bg-secondary/30 hover:bg-secondary/50"
+                        "flex flex-shrink-0 items-center gap-0.5 font-mono text-[10px]",
+                        delta === 0
+                          ? "text-muted-foreground"
+                          : delta > 0
+                          ? "text-destructive"
+                          : "text-green-500"
                       )}
+                      title={`Live position: P${livePos}`}
                     >
-                      {!isLocked && (
-                        <GripVertical className="h-4 w-4 flex-shrink-0 text-muted-foreground/40" />
+                      {delta === 0 ? (
+                        <Minus className="h-3 w-3" />
+                      ) : delta > 0 ? (
+                        <TrendingDown className="h-3 w-3" />
+                      ) : (
+                        <TrendingUp className="h-3 w-3" />
                       )}
-                      <span className={cn(
-                        "flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[10px] font-bold",
-                        index === 0 ? "bg-primary text-primary-foreground"
-                          : index <= 2 ? "bg-primary/20 text-primary"
-                          : "bg-muted text-muted-foreground"
-                      )}>
-                        {index + 1}
-                      </span>
-                      <span className="font-mono text-[10px] text-muted-foreground w-7 flex-shrink-0">
-                        {driver.short_name}
-                      </span>
-                      <span className="flex-1 text-xs font-medium truncate">
-                        {driver.name} {driver.surname}
-                      </span>
-                      {/* Live delta indicator */}
-                      {isLocked && hasLiveData && delta !== null && (
-                        <span className={cn(
-                          "flex items-center gap-0.5 text-[10px] font-mono flex-shrink-0",
-                          delta === 0 ? "text-muted-foreground"
-                            : delta > 0 ? "text-destructive"
-                            : "text-f1-green"
-                        )}>
-                          {delta === 0 ? <Minus className="h-3 w-3" />
-                            : delta > 0 ? <TrendingDown className="h-3 w-3" />
-                            : <TrendingUp className="h-3 w-3" />}
-                          {delta === 0 ? "=" : Math.abs(delta)}
-                        </span>
-                      )}
-                      {/* Mobile arrows */}
-                      {!isLocked && (
-                        <div className="flex items-center gap-0.5 flex-shrink-0 sm:hidden">
-                          <button
-                            onClick={() => handleMove(index, "up")}
-                            disabled={index === 0}
-                            className="rounded p-0.5 text-muted-foreground hover:bg-muted disabled:opacity-20"
-                            aria-label={`Move ${driver.surname} up`}
-                          >
-                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                              <path d="M6 3L10 8H2L6 3Z" fill="currentColor" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleMove(index, "down")}
-                            disabled={index === order.length - 1}
-                            className="rounded p-0.5 text-muted-foreground hover:bg-muted disabled:opacity-20"
-                            aria-label={`Move ${driver.surname} down`}
-                          >
-                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                              <path d="M6 9L2 4H10L6 9Z" fill="currentColor" />
-                            </svg>
-                          </button>
-                        </div>
-                      )}
+                      {delta === 0 ? "=" : Math.abs(delta)}
+                    </span>
+                  )}
+
+                  {/* Mobile up/down arrows */}
+                  {!isLocked && (
+                    <div className="flex flex-shrink-0 items-center gap-0.5 sm:hidden">
+                      <button
+                        onClick={() => handleMove(index, "up")}
+                        disabled={index === 0}
+                        className="rounded p-0.5 text-muted-foreground hover:bg-muted disabled:opacity-20"
+                        aria-label={`Move ${driver.surname} up`}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                          <path d="M6 3L10 8H2L6 3Z" fill="currentColor" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleMove(index, "down")}
+                        disabled={index === order.length - 1}
+                        className="rounded p-0.5 text-muted-foreground hover:bg-muted disabled:opacity-20"
+                        aria-label={`Move ${driver.surname} down`}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                          <path d="M6 9L2 4H10L6 9Z" fill="currentColor" />
+                        </svg>
+                      </button>
                     </div>
-                  )
-                })}
-              </div>
-              {!isLocked && (
-                <Button onClick={handleSubmit} disabled={saving} className="mt-4 w-full">
-                  {saving ? "Saving..." : existingPrediction ? "Update Prediction" : "Save Prediction"}
-                </Button>
-              )}
-            </>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Save button -- only shown when not locked */}
+          {!isLocked && (
+            <Button onClick={handleSubmit} disabled={saving} className="mt-4 w-full">
+              {saving
+                ? "Saving..."
+                : existingPrediction
+                ? "Update Prediction"
+                : "Save Prediction"}
+            </Button>
+          )}
+
+          {/* Locked notice when no prediction submitted */}
+          {isLocked && !existingPrediction && (
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              No prediction was submitted before the season started.
+            </p>
           )}
         </CardContent>
       </Card>
@@ -313,7 +340,10 @@ export function WdcPredictionForm({
               Live WDC Standings
             </CardTitle>
             {hasLiveData && currentStandings[0]?.source === "live" && (
-              <Badge variant="secondary" className="gap-1 text-f1-green border-f1-green/30 bg-f1-green/10 text-[10px]">
+              <Badge
+                variant="secondary"
+                className="gap-1 border-green-500/30 bg-green-500/10 text-[10px] text-green-500"
+              >
                 Live
               </Badge>
             )}
@@ -339,51 +369,68 @@ export function WdcPredictionForm({
                 const driver = driverMap.get(standing.driver_id)
                 if (!driver) return null
 
-                // How does the live position compare to the user's prediction?
                 const predictedPos = predictionPositionMap.get(standing.driver_id)
-                const delta = predictedPos != null ? predictedPos - standing.position : null
+                const delta =
+                  predictedPos != null ? predictedPos - standing.position : null
 
                 return (
                   <div
                     key={standing.driver_id}
-                    className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-secondary/30 transition-colors"
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-secondary/30"
                   >
-                    <span className={cn(
-                      "flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[10px] font-bold",
-                      standing.position === 1 ? "bg-primary text-primary-foreground"
-                        : standing.position <= 3 ? "bg-primary/20 text-primary"
-                        : "bg-muted text-muted-foreground"
-                    )}>
+                    <span
+                      className={cn(
+                        "flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[10px] font-bold",
+                        standing.position === 1
+                          ? "bg-primary text-primary-foreground"
+                          : standing.position <= 3
+                          ? "bg-primary/20 text-primary"
+                          : "bg-muted text-muted-foreground"
+                      )}
+                    >
                       {standing.position}
                     </span>
-                    <span className="font-mono text-[10px] text-muted-foreground w-7 flex-shrink-0">
+                    <span className="w-7 flex-shrink-0 font-mono text-[10px] text-muted-foreground">
                       {driver.short_name}
                     </span>
-                    <span className="flex-1 text-xs font-medium truncate">
+                    <span className="flex-1 truncate text-xs font-medium">
                       {driver.name} {driver.surname}
                     </span>
-                    {/* Your prediction delta */}
+
+                    {/* Your prediction delta vs live */}
                     {existingPrediction && delta !== null && (
-                      <span className={cn(
-                        "flex items-center gap-0.5 text-[10px] font-mono flex-shrink-0",
-                        delta === 0 ? "text-muted-foreground"
-                          : delta < 0 ? "text-destructive"
-                          : "text-f1-green"
-                      )} title={`You predicted P${predictedPos}`}>
-                        {delta === 0 ? <Minus className="h-3 w-3" />
-                          : delta < 0 ? <TrendingDown className="h-3 w-3" />
-                          : <TrendingUp className="h-3 w-3" />}
+                      <span
+                        className={cn(
+                          "flex flex-shrink-0 items-center gap-0.5 font-mono text-[10px]",
+                          delta === 0
+                            ? "text-muted-foreground"
+                            : delta < 0
+                            ? "text-destructive"
+                            : "text-green-500"
+                        )}
+                        title={`You predicted P${predictedPos}`}
+                      >
+                        {delta === 0 ? (
+                          <Minus className="h-3 w-3" />
+                        ) : delta < 0 ? (
+                          <TrendingDown className="h-3 w-3" />
+                        ) : (
+                          <TrendingUp className="h-3 w-3" />
+                        )}
                         {delta === 0 ? "=" : Math.abs(delta)}
                       </span>
                     )}
-                    <span className="font-mono text-xs font-bold tabular-nums w-8 text-right flex-shrink-0">
+
+                    <span className="w-8 flex-shrink-0 text-right font-mono text-xs font-bold tabular-nums">
                       {standing.points}
                     </span>
                   </div>
                 )
               })}
-              <p className="mt-2 text-[10px] text-muted-foreground text-right">
-                {currentStandings[0]?.source === "live" ? "Via F1 API" : "Aggregated from race results"}
+              <p className="mt-2 text-right text-[10px] text-muted-foreground">
+                {currentStandings[0]?.source === "live"
+                  ? "Via F1 API"
+                  : "Aggregated from race results"}
               </p>
             </div>
           )}
