@@ -5,7 +5,7 @@ import { sendInviteCodeEmail } from "@/lib/email"
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { action, name, inviteCode, playerName, email, googleId } = body
+  const { action, name, inviteCode, playerName, email, googleId, avatarUrl } = body
 
   const supabase = await createClient()
 
@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     const playerInsert: Record<string, string> = { group_id: group.id, name: playerName }
     if (googleId) playerInsert.google_id = googleId
     if (email) playerInsert.email = email
+    if (avatarUrl) playerInsert.avatar_url = avatarUrl
 
     const { data: player, error: playerError } = await supabase
       .from("players")
@@ -49,6 +50,9 @@ export async function POST(request: NextRequest) {
       groupId: group.id,
       playerName: player.name,
       groupName: group.name,
+      avatarUrl: player.avatar_url || "",
+      email: player.email || "",
+      googleLinked: !!player.google_id,
     })
 
     // Send invite code email (non-blocking -- don't fail group creation if email fails)
@@ -97,6 +101,9 @@ export async function POST(request: NextRequest) {
         groupId: group.id,
         playerName: existingPlayer.name,
         groupName: group.name,
+        avatarUrl: existingPlayer.avatar_url || "",
+        email: existingPlayer.email || "",
+        googleLinked: !!existingPlayer.google_id,
       })
       return NextResponse.json({ group, player: existingPlayer })
     }
@@ -104,6 +111,7 @@ export async function POST(request: NextRequest) {
     const joinInsert: Record<string, string> = { group_id: group.id, name: playerName }
     if (googleId) joinInsert.google_id = googleId
     if (email) joinInsert.email = email
+    if (avatarUrl) joinInsert.avatar_url = avatarUrl
 
     const { data: player, error: playerError } = await supabase
       .from("players")
@@ -120,6 +128,9 @@ export async function POST(request: NextRequest) {
       groupId: group.id,
       playerName: player.name,
       groupName: group.name,
+      avatarUrl: player.avatar_url || "",
+      email: player.email || "",
+      googleLinked: !!player.google_id,
     })
 
     return NextResponse.json({ group, player })

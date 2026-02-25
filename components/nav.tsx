@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   X,
+  User,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
@@ -24,12 +25,21 @@ const links = [
 export function Nav({
   playerName,
   groupName,
+  avatarUrl,
 }: {
   playerName: string
   groupName: string
+  avatarUrl?: string
 }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const initials = playerName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
 
   async function handleLogout() {
     await fetch("/api/session", { method: "DELETE" })
@@ -71,10 +81,34 @@ export function Nav({
 
         <div className="ml-auto flex items-center gap-3">
           <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
-            <span>{playerName}</span>
-            <span className="text-border">|</span>
             <span>{groupName}</span>
           </div>
+
+          {/* Profile avatar link */}
+          <Link
+            href="/profile"
+            className={cn(
+              "flex items-center gap-2 rounded-full p-0.5 transition-colors hover:ring-2 hover:ring-primary/40",
+              pathname === "/profile" && "ring-2 ring-primary"
+            )}
+            aria-label="View profile"
+          >
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={playerName}
+                className="h-8 w-8 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                {initials}
+              </div>
+            )}
+            <span className="hidden text-sm font-medium text-foreground lg:inline">
+              {playerName}
+            </span>
+          </Link>
+
           <button
             onClick={handleLogout}
             className="hidden rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground sm:block"
@@ -97,8 +131,22 @@ export function Nav({
       {/* Mobile nav */}
       {mobileOpen && (
         <div className="border-t border-border px-4 pb-4 pt-2 md:hidden">
-          <div className="mb-3 text-xs text-muted-foreground">
-            {playerName} &middot; {groupName}
+          <div className="mb-3 flex items-center gap-3">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={playerName}
+                className="h-8 w-8 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                {initials}
+              </div>
+            )}
+            <div>
+              <p className="text-sm font-medium">{playerName}</p>
+              <p className="text-xs text-muted-foreground">{groupName}</p>
+            </div>
           </div>
           <nav className="flex flex-col gap-1" role="navigation" aria-label="Mobile navigation">
             {links.map((link) => {
@@ -121,6 +169,19 @@ export function Nav({
                 </Link>
               )
             })}
+            <Link
+              href="/profile"
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                pathname === "/profile"
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              )}
+            >
+              <User className="h-4 w-4" />
+              Profile
+            </Link>
             <button
               onClick={handleLogout}
               className="mt-2 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"

@@ -5,6 +5,9 @@ export interface PlayerSession {
   groupId: string
   playerName: string
   groupName: string
+  avatarUrl?: string
+  email?: string
+  googleLinked?: boolean
 }
 
 const SESSION_COOKIE = "f1_session"
