@@ -45,15 +45,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: playerError.message }, { status: 500 })
     }
 
-    await setSession({
-      playerId: player.id,
-      groupId: group.id,
-      playerName: player.name,
-      groupName: group.name,
-      avatarUrl: player.avatar_url || "",
-      email: player.email || "",
-      googleLinked: !!player.google_id,
-    })
+    try {
+      await setSession({
+        playerId: player.id,
+        groupId: group.id,
+        playerName: player.name,
+        groupName: group.name,
+        avatarUrl: player.avatar_url || "",
+        email: player.email || "",
+        googleLinked: !!player.google_id,
+      })
+      console.log("[v0] Session set for player:", player.name, "group:", group.name)
+    } catch (sessionError) {
+      console.error("[v0] Session set failed:", sessionError)
+    }
 
     // Send invite code email (non-blocking -- don't fail group creation if email fails)
     let emailSent = false
@@ -65,10 +70,12 @@ export async function POST(request: NextRequest) {
         creatorName: player.name,
       })
       emailSent = true
+      console.log("[v0] Invite email sent to:", email)
     } catch (emailError) {
-      console.error("Email send failed, group still created:", emailError)
+      console.error("[v0] Email send failed, group still created:", emailError)
     }
 
+    console.log("[v0] Returning success - invite_code:", group.invite_code, "group:", group.name)
     return NextResponse.json({ group, player, emailSent })
   }
 
