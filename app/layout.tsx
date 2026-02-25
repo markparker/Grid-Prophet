@@ -12,21 +12,8 @@ export const metadata: Metadata = {
   description:
     "Predict F1 2026 race results, pole positions, and the World Drivers' Championship with your friends.",
   icons: {
-    icon: [
-      {
-        url: "/icon-light-32x32.png",
-        media: "(prefers-color-scheme: light)",
-      },
-      {
-        url: "/icon-dark-32x32.png",
-        media: "(prefers-color-scheme: dark)",
-      },
-      {
-        url: "/icon.svg",
-        type: "image/svg+xml",
-      },
-    ],
-    apple: "/apple-icon.png",
+    icon: "/favicon.png",
+    apple: "/favicon.png",
   },
 }
 
