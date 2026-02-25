@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServerClient } from "@supabase/ssr"
+import { cookies } from "next/headers"
 import { setSession } from "@/lib/session"
 
 export async function GET(request: Request) {
@@ -9,11 +10,42 @@ export async function GET(request: Request) {
   const isLinkFlow = searchParams.get("link") === "true"
 
   if (code) {
-    const supabase = await createClient()
+    const cookieStore = await cookies()
+
+    // We need to track cookies that Supabase wants to set so we can
+    // forward them on the redirect response (cookieStore.set inside
+    // a route handler that returns a redirect may not stick).
+    const cookiesToForward: {
+      name: string
+      value: string
+      options: Record<string, unknown>
+    }[] = []
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              try {
+                cookieStore.set(name, value, options)
+              } catch {
+                // ignore -- we forward on the redirect below
+              }
+              cookiesToForward.push({ name, value, options })
+            })
+          },
+        },
+      }
+    )
+
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      // Get the authenticated user
       const {
         data: { user },
       } = await supabase.auth.getUser()
@@ -26,9 +58,18 @@ export async function GET(request: Request) {
           user.user_metadata?.name ||
           email.split("@")[0]
 
-        // If this is a link-account flow from the profile page, redirect back to profile
+        // Helper to create a redirect that carries auth cookies
+        function redirectWithCookies(url: string) {
+          const response = NextResponse.redirect(url)
+          for (const { name, value, options } of cookiesToForward) {
+            response.cookies.set(name, value, options as Record<string, string>)
+          }
+          return response
+        }
+
+        // If this is a link-account flow from the profile page, redirect back
         if (isLinkFlow && next) {
-          return NextResponse.redirect(`${origin}${next}?link=true`)
+          return redirectWithCookies(`${origin}${next}?link=true`)
         }
 
         // Check if this Google user already has a player linked
@@ -39,14 +80,12 @@ export async function GET(request: Request) {
           .single()
 
         if (existingPlayer) {
-          // Returning user -- restore their session
           const avatarUrl =
             existingPlayer.avatar_url ||
             user.user_metadata?.avatar_url ||
             user.user_metadata?.picture ||
             ""
 
-          // Update avatar from Google if player doesn't have one yet
           if (!existingPlayer.avatar_url && avatarUrl) {
             await supabase
               .from("players")
@@ -63,10 +102,10 @@ export async function GET(request: Request) {
             email: existingPlayer.email || email,
             googleLinked: true,
           })
-          return NextResponse.redirect(`${origin}/dashboard`)
+          return redirectWithCookies(`${origin}/dashboard`)
         }
 
-        // New Google user -- send them to the join page with their info prefilled
+        // New Google user -- prefill the join form
         const avatarFromGoogle =
           user.user_metadata?.avatar_url ||
           user.user_metadata?.picture ||
@@ -77,11 +116,10 @@ export async function GET(request: Request) {
           name: fullName,
           avatar_url: avatarFromGoogle,
         })
-        return NextResponse.redirect(`${origin}/?${params.toString()}`)
+        return redirectWithCookies(`${origin}/?${params.toString()}`)
       }
     }
   }
 
-  // Auth failed -- redirect to home with error
   return NextResponse.redirect(`${origin}/?error=auth_failed`)
 }
