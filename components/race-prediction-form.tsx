@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
-import { X, Lock } from "lucide-react"
+import { Lock } from "lucide-react"
 
 interface Driver {
   id: string
@@ -37,6 +37,19 @@ interface Props {
   isLocked: boolean
 }
 
+const POSITION_LABELS = [
+  "P1 - Winner",
+  "P2 - Podium",
+  "P3 - Podium",
+  "P4",
+  "P5",
+  "P6",
+  "P7",
+  "P8",
+  "P9",
+  "P10",
+]
+
 export function RacePredictionForm({
   raceId,
   drivers,
@@ -48,52 +61,50 @@ export function RacePredictionForm({
     (a, b) => a.predicted_position - b.predicted_position
   )
 
+  // Initialize 10 slots, each either filled from existing prediction or empty string
+  const [positions, setPositions] = useState<string[]>(() => {
+    if (sortedExisting.length === 10) {
+      return sortedExisting.map((p) => p.driver_id)
+    }
+    return Array(10).fill("")
+  })
+
   const [polePrediction, setPolePrediction] = useState<string>(
     existingPrediction?.pole_prediction || ""
   )
-  const [selectedDrivers, setSelectedDrivers] = useState<string[]>(
-    sortedExisting.length === 10
-      ? sortedExisting.map((p) => p.driver_id)
-      : []
-  )
   const [saving, setSaving] = useState(false)
-  const [selectKey, setSelectKey] = useState(0)
-
-  const availableDrivers = drivers.filter(
-    (d) => !selectedDrivers.includes(d.id)
-  )
 
   const driverMap = new Map(drivers.map((d) => [d.id, d]))
 
-  function addDriver(driverId: string) {
-    if (selectedDrivers.length >= 10) return
-    if (selectedDrivers.includes(driverId)) return
-    setSelectedDrivers((prev) => [...prev, driverId])
-    setSelectKey((k) => k + 1)
+  // Returns which drivers are available for a given slot (excluding those already picked in other slots)
+  function getAvailableDrivers(slotIndex: number) {
+    const usedIds = new Set(
+      positions.filter((id, i) => id && i !== slotIndex)
+    )
+    return drivers.filter((d) => !usedIds.has(d.id))
   }
 
-  function removeDriver(driverId: string) {
-    setSelectedDrivers((prev) => prev.filter((id) => id !== driverId))
+  function handlePositionChange(slotIndex: number, driverId: string) {
+    setPositions((prev) => {
+      const next = [...prev]
+      next[slotIndex] = driverId
+      return next
+    })
   }
 
-  const moveDriver = useCallback(
-    (index: number, direction: "up" | "down") => {
-      setSelectedDrivers((prev) => {
-        const newList = [...prev]
-        const targetIndex = direction === "up" ? index - 1 : index + 1
-        if (targetIndex < 0 || targetIndex >= newList.length) return prev
-        const temp = newList[index]
-        newList[index] = newList[targetIndex]
-        newList[targetIndex] = temp
-        return newList
-      })
-    },
-    []
-  )
+  function handleClearPosition(slotIndex: number) {
+    setPositions((prev) => {
+      const next = [...prev]
+      next[slotIndex] = ""
+      return next
+    })
+  }
+
+  const filledCount = positions.filter(Boolean).length
 
   async function handleSubmit() {
-    if (selectedDrivers.length !== 10) {
-      toast.error("You must select exactly 10 drivers for the top 10")
+    if (filledCount !== 10) {
+      toast.error("You must select a driver for all 10 positions")
       return
     }
     if (!polePrediction) {
@@ -109,7 +120,7 @@ export function RacePredictionForm({
         body: JSON.stringify({
           raceId,
           polePrediction,
-          positions: selectedDrivers.map((driverId, i) => ({
+          positions: positions.map((driverId, i) => ({
             driver_id: driverId,
             position: i + 1,
           })),
@@ -139,19 +150,6 @@ export function RacePredictionForm({
       </Card>
     )
   }
-
-  const positionLabels = [
-    "P1 - Winner",
-    "P2",
-    "P3",
-    "P4",
-    "P5",
-    "P6",
-    "P7",
-    "P8",
-    "P9",
-    "P10",
-  ]
 
   return (
     <div className="flex flex-col gap-4">
@@ -186,123 +184,89 @@ export function RacePredictionForm({
         </CardContent>
       </Card>
 
-      {/* Top 10 Prediction */}
+      {/* Top 10 Prediction - Each position has its own Select */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
             Top 10 Finishing Order
             <span className="ml-2 font-normal text-sm text-muted-foreground">
-              ({selectedDrivers.length}/10)
+              ({filledCount}/10)
             </span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {/* Selected drivers list */}
-          <div className="flex flex-col gap-1.5">
-            {selectedDrivers.map((driverId, index) => {
-              const driver = driverMap.get(driverId)
-              if (!driver) return null
-              return (
-                <div
-                  key={driverId}
-                  className="flex items-center gap-2 rounded-md border border-border bg-secondary/50 px-3 py-2"
-                >
-                  <span
-                    className={`flex h-6 w-6 items-center justify-center rounded text-xs font-bold ${
-                      index === 0
-                        ? "bg-primary text-primary-foreground"
-                        : index <= 2
-                        ? "bg-primary/20 text-primary"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {index + 1}
-                  </span>
-                  <span className="font-mono text-xs text-muted-foreground w-8">
-                    {driver.short_name}
-                  </span>
-                  <span className="flex-1 text-sm font-medium">
-                    {driver.name} {driver.surname}
-                  </span>
-                  <span className="text-xs text-muted-foreground hidden sm:block">
-                    {driver.team_name}
-                  </span>
-                  {!isLocked && (
-                    <div className="flex items-center gap-0.5">
-                      <button
-                        onClick={() => moveDriver(index, "up")}
-                        disabled={index === 0}
-                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
-                        aria-label={`Move ${driver.surname} up`}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                          <path d="M6 3L10 8H2L6 3Z" fill="currentColor" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => moveDriver(index, "down")}
-                        disabled={index === selectedDrivers.length - 1}
-                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
-                        aria-label={`Move ${driver.surname} down`}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                          <path d="M6 9L2 4H10L6 9Z" fill="currentColor" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => removeDriver(driverId)}
-                        className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        aria-label={`Remove ${driver.surname}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-            {selectedDrivers.length < 10 &&
-              Array.from({ length: 10 - selectedDrivers.length }).map(
-                (_, i) => (
-                  <div
-                    key={`empty-${i}`}
-                    className="flex items-center gap-2 rounded-md border border-dashed border-border px-3 py-2"
-                  >
-                    <span className="flex h-6 w-6 items-center justify-center rounded bg-muted text-xs text-muted-foreground">
-                      {selectedDrivers.length + i + 1}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {positionLabels[selectedDrivers.length + i]}
-                    </span>
-                  </div>
-                )
-              )}
-          </div>
+        <CardContent className="flex flex-col gap-2">
+          {POSITION_LABELS.map((label, index) => {
+            const selectedDriverId = positions[index]
+            const selectedDriver = selectedDriverId
+              ? driverMap.get(selectedDriverId)
+              : null
+            const available = getAvailableDrivers(index)
 
-          {/* Add driver selector */}
-          {!isLocked && selectedDrivers.length < 10 && (
-            <Select key={selectKey} onValueChange={addDriver} value="">
-              <SelectTrigger className="w-full">
-                <SelectValue
-                  placeholder={`Add ${positionLabels[selectedDrivers.length]} driver...`}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {availableDrivers.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.short_name} - {d.name} {d.surname} ({d.team_name})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+            return (
+              <div key={index} className="flex items-center gap-2">
+                <span
+                  className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-xs font-bold ${
+                    index === 0
+                      ? "bg-primary text-primary-foreground"
+                      : index <= 2
+                      ? "bg-primary/20 text-primary"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {index + 1}
+                </span>
+
+                <div className="flex-1">
+                  <Select
+                    value={selectedDriverId || ""}
+                    onValueChange={(val) => handlePositionChange(index, val)}
+                    disabled={isLocked}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue
+                        placeholder={label}
+                      >
+                        {selectedDriver
+                          ? `${selectedDriver.short_name} - ${selectedDriver.name} ${selectedDriver.surname}`
+                          : label}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {available.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>
+                          {d.short_name} - {d.name} {d.surname} ({d.team_name})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedDriverId && !isLocked && (
+                  <button
+                    onClick={() => handleClearPosition(index)}
+                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                    aria-label={`Clear ${label}`}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <path
+                        d="M10.5 3.5L3.5 10.5M3.5 3.5L10.5 10.5"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            )
+          })}
 
           {/* Submit */}
           {!isLocked && (
             <Button
               onClick={handleSubmit}
-              disabled={saving || selectedDrivers.length !== 10 || !polePrediction}
-              className="w-full sm:w-auto"
+              disabled={saving || filledCount !== 10 || !polePrediction}
+              className="mt-2 w-full sm:w-auto"
             >
               {saving
                 ? "Saving..."
@@ -313,7 +277,7 @@ export function RacePredictionForm({
           )}
 
           {isLocked && existingPrediction && (
-            <p className="text-xs text-muted-foreground">
+            <p className="mt-2 text-xs text-muted-foreground">
               Predictions are locked. Your prediction has been saved.
             </p>
           )}

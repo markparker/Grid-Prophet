@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { ArrowUp, ArrowDown, Trophy } from "lucide-react"
+import { GripVertical, Trophy } from "lucide-react"
 
 interface Driver {
   id: string
@@ -39,28 +39,86 @@ export function WdcPredictionForm({
   currentStandings,
 }: Props) {
   const driverMap = new Map(drivers.map((d) => [d.id, d]))
-  const standingsMap = new Map(
-    currentStandings.map((s) => [s.driver_id, s])
-  )
 
-  // Initialize order from existing prediction or default to current standings/driver order
   const existingPositions = existingPrediction?.wdc_prediction_positions || []
   const sortedExisting = [...existingPositions].sort(
     (a, b) => a.predicted_position - b.predicted_position
   )
 
   const [order, setOrder] = useState<string[]>(() => {
-    if (sortedExisting.length === 22) {
+    if (sortedExisting.length === drivers.length) {
       return sortedExisting.map((p) => p.driver_id)
     }
-    if (currentStandings.length > 0 && currentStandings.some((s) => s.points > 0)) {
+    if (
+      currentStandings.length > 0 &&
+      currentStandings.some((s) => s.points > 0)
+    ) {
       return currentStandings.map((s) => s.driver_id)
     }
     return drivers.map((d) => d.id)
   })
   const [saving, setSaving] = useState(false)
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const dragNode = useRef<HTMLDivElement | null>(null)
 
-  const moveDriver = useCallback(
+  const handleDragStart = useCallback(
+    (e: React.DragEvent<HTMLDivElement>, index: number) => {
+      setDragIndex(index)
+      dragNode.current = e.currentTarget
+      e.dataTransfer.effectAllowed = "move"
+      e.dataTransfer.setData("text/plain", String(index))
+      // Make the drag image slightly transparent
+      setTimeout(() => {
+        if (dragNode.current) {
+          dragNode.current.style.opacity = "0.4"
+        }
+      }, 0)
+    },
+    []
+  )
+
+  const handleDragEnd = useCallback(() => {
+    if (dragNode.current) {
+      dragNode.current.style.opacity = "1"
+    }
+    setDragIndex(null)
+    setDragOverIndex(null)
+    dragNode.current = null
+  }, [])
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent<HTMLDivElement>, index: number) => {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = "move"
+      if (dragIndex === null || dragIndex === index) return
+      setDragOverIndex(index)
+    },
+    [dragIndex]
+  )
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>, dropIndex: number) => {
+      e.preventDefault()
+      if (dragIndex === null || dragIndex === dropIndex) return
+
+      setOrder((prev) => {
+        const newOrder = [...prev]
+        const [removed] = newOrder.splice(dragIndex, 1)
+        newOrder.splice(dropIndex, 0, removed)
+        return newOrder
+      })
+
+      setDragIndex(null)
+      setDragOverIndex(null)
+    },
+    [dragIndex]
+  )
+
+  // Touch drag support state
+  const [touchDragIndex, setTouchDragIndex] = useState<number | null>(null)
+
+  const handleTouchMove = useCallback(
     (index: number, direction: "up" | "down") => {
       setOrder((prev) => {
         const newList = [...prev]
@@ -76,8 +134,8 @@ export function WdcPredictionForm({
   )
 
   async function handleSubmit() {
-    if (order.length !== 22) {
-      toast.error("All 22 drivers must be included")
+    if (order.length !== drivers.length) {
+      toast.error(`All ${drivers.length} drivers must be included`)
       return
     }
 
@@ -114,6 +172,9 @@ export function WdcPredictionForm({
             <Trophy className="h-4 w-4 text-primary" />
             Your Prediction
           </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Drag drivers to reorder, or use the arrows on mobile.
+          </p>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-1">
@@ -121,11 +182,32 @@ export function WdcPredictionForm({
               const driver = driverMap.get(driverId)
               if (!driver) return null
 
+              const isDragging = dragIndex === index
+              const isDragOver =
+                dragOverIndex === index && dragIndex !== index
+              const isTouchActive = touchDragIndex === index
+
               return (
                 <div
                   key={driverId}
-                  className="flex items-center gap-2 rounded-md border border-border bg-secondary/30 px-2 py-1.5"
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, index)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDrop={(e) => handleDrop(e, index)}
+                  onDragLeave={() => setDragOverIndex(null)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-md border px-2 py-1.5 cursor-grab active:cursor-grabbing transition-all select-none",
+                    isDragging
+                      ? "border-primary/40 bg-primary/5 opacity-40"
+                      : isDragOver
+                      ? "border-primary bg-primary/10 scale-[1.01]"
+                      : isTouchActive
+                      ? "border-primary bg-primary/5"
+                      : "border-border bg-secondary/30 hover:bg-secondary/50"
+                  )}
                 >
+                  <GripVertical className="h-4 w-4 flex-shrink-0 text-muted-foreground/50" />
                   <span
                     className={cn(
                       "flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-[10px] font-bold",
@@ -149,22 +231,44 @@ export function WdcPredictionForm({
                   <span className="text-[10px] text-muted-foreground hidden sm:block truncate max-w-20">
                     {driver.team_name}
                   </span>
-                  <div className="flex items-center gap-0.5 flex-shrink-0">
+
+                  {/* Mobile arrow buttons -- visible only on small screens */}
+                  <div className="flex items-center gap-0.5 flex-shrink-0 sm:hidden">
                     <button
-                      onClick={() => moveDriver(index, "up")}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleTouchMove(index, "up")
+                      }}
                       disabled={index === 0}
                       className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-20"
                       aria-label={`Move ${driver.surname} up`}
                     >
-                      <ArrowUp className="h-3 w-3" />
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                      >
+                        <path d="M6 3L10 8H2L6 3Z" fill="currentColor" />
+                      </svg>
                     </button>
                     <button
-                      onClick={() => moveDriver(index, "down")}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleTouchMove(index, "down")
+                      }}
                       disabled={index === order.length - 1}
                       className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-20"
                       aria-label={`Move ${driver.surname} down`}
                     >
-                      <ArrowDown className="h-3 w-3" />
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                      >
+                        <path d="M6 9L2 4H10L6 9Z" fill="currentColor" />
+                      </svg>
                     </button>
                   </div>
                 </div>
@@ -188,9 +292,7 @@ export function WdcPredictionForm({
       {/* Current Standings */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">
-            Current WDC Standings
-          </CardTitle>
+          <CardTitle className="text-base">Current WDC Standings</CardTitle>
         </CardHeader>
         <CardContent>
           {currentStandings.every((s) => s.points === 0) ? (
