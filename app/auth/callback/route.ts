@@ -72,36 +72,43 @@ export async function GET(request: Request) {
           return redirectWithCookies(`${origin}${next}?link=true`)
         }
 
-        // Check if this Google user already has a player linked
-        const { data: existingPlayer } = await supabase
+        // Check if this Google user has player(s) linked (may be in multiple leagues)
+        const { data: existingPlayers } = await supabase
           .from("players")
           .select("*, groups(*)")
           .eq("google_id", googleId)
-          .single()
 
-        if (existingPlayer) {
+        if (existingPlayers && existingPlayers.length > 0) {
+          // Use the most recently created player (or first one)
+          const player = existingPlayers[0]
           const avatarUrl =
-            existingPlayer.avatar_url ||
+            player.avatar_url ||
             user.user_metadata?.avatar_url ||
             user.user_metadata?.picture ||
             ""
 
-          if (!existingPlayer.avatar_url && avatarUrl) {
+          if (!player.avatar_url && avatarUrl) {
             await supabase
               .from("players")
               .update({ avatar_url: avatarUrl })
-              .eq("id", existingPlayer.id)
+              .eq("id", player.id)
           }
 
           await setSession({
-            playerId: existingPlayer.id,
-            groupId: existingPlayer.group_id,
-            playerName: existingPlayer.name,
-            groupName: existingPlayer.groups.name,
+            playerId: player.id,
+            groupId: player.group_id,
+            playerName: player.name,
+            groupName: player.groups.name,
             avatarUrl: avatarUrl,
-            email: existingPlayer.email || email,
+            email: player.email || email,
             googleLinked: true,
           })
+
+          // If user has multiple leagues, send them to a league picker
+          if (existingPlayers.length > 1) {
+            return redirectWithCookies(`${origin}/dashboard?switch=true`)
+          }
+
           return redirectWithCookies(`${origin}/dashboard`)
         }
 

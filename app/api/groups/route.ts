@@ -11,11 +11,11 @@ export async function POST(request: NextRequest) {
 
   if (action === "create") {
     if (!name || !playerName) {
-      return NextResponse.json({ error: "Group name and player name are required" }, { status: 400 })
+      return NextResponse.json({ error: "League name and player name are required" }, { status: 400 })
     }
 
     if (!email) {
-      return NextResponse.json({ error: "Email is required to receive the invite code" }, { status: 400 })
+      return NextResponse.json({ error: "Email is required to receive the league invite code" }, { status: 400 })
     }
 
     const code = inviteCode || Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (groupError || !group) {
-      return NextResponse.json({ error: "Invalid invite code" }, { status: 404 })
+      return NextResponse.json({ error: "Invalid invite code. No league found." }, { status: 404 })
     }
 
     // Check if player already exists

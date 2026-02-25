@@ -25,6 +25,7 @@ export function JoinForm() {
   const googleId = searchParams.get("google_id") || ""
   const googleEmail = searchParams.get("email") || ""
   const googleName = searchParams.get("name") || ""
+  const googleAvatarUrl = searchParams.get("avatar_url") || ""
   const authError = searchParams.get("error")
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export function JoinForm() {
       toast.error("Google sign-in failed. Please try again.")
     }
     if (googleId) {
-      toast.info("Signed in with Google! Now create or join a league.")
+      toast.info("Signed in with Google! Now create or join a prediction league.")
     }
   }, [authError, googleId])
 
@@ -74,11 +75,12 @@ export function JoinForm() {
           playerName,
           googleId: googleId || undefined,
           email: googleEmail || undefined,
+          avatarUrl: googleAvatarUrl || undefined,
         }),
       })
       const data = await res.json()
       if (!res.ok) {
-        toast.error(data.error || "Failed to join group")
+        toast.error(data.error || "Failed to join league")
         setLoading(false)
         return
       }
@@ -121,19 +123,20 @@ export function JoinForm() {
           playerName,
           email,
           googleId: googleId || undefined,
+          avatarUrl: googleAvatarUrl || undefined,
         }),
       })
       const data = await res.json()
       if (!res.ok) {
-        toast.error(data.error || "Failed to create group")
+        toast.error(data.error || "Failed to create league")
         setLoading(false)
         return
       }
       if (data.emailSent) {
-        toast.success(`Group created! Invite code sent to ${email}`)
+        toast.success(`League created! Invite code sent to ${email}`)
       } else {
         toast.success(
-          `Group created! Invite code: ${data.group.invite_code} (email could not be sent)`
+          `League created! Invite code: ${data.group.invite_code} (email could not be sent)`
         )
       }
       window.location.href = "/dashboard"
@@ -151,7 +154,7 @@ export function JoinForm() {
           <CardContent className="pt-6">
             <div className="flex flex-col gap-3">
               <p className="text-sm text-muted-foreground text-center">
-                Already in a league? Sign back in instantly.
+                Already in a prediction league? Sign back in instantly.
               </p>
               <Button
                 variant="outline"
@@ -211,15 +214,15 @@ export function JoinForm() {
         <Tabs defaultValue="join">
           <CardHeader className="pb-3">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="join">Join Group</TabsTrigger>
-              <TabsTrigger value="create">Create Group</TabsTrigger>
+              <TabsTrigger value="join">Join League</TabsTrigger>
+              <TabsTrigger value="create">Create League</TabsTrigger>
             </TabsList>
           </CardHeader>
           <CardContent>
             <TabsContent value="join" className="mt-0">
               <CardTitle className="mb-1 text-lg">Join a League</CardTitle>
               <CardDescription className="mb-4">
-                Enter your group&apos;s invite code to join.
+                Enter your league&apos;s invite code to join.
               </CardDescription>
               <form onSubmit={handleJoin} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
@@ -251,11 +254,11 @@ export function JoinForm() {
             <TabsContent value="create" className="mt-0">
               <CardTitle className="mb-1 text-lg">Create a League</CardTitle>
               <CardDescription className="mb-4">
-                Start a new prediction league and invite friends.
+                Start a new prediction league and invite your friends.
               </CardDescription>
               <form onSubmit={handleCreate} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="create-group">Group Name</Label>
+                  <Label htmlFor="create-group">League Name</Label>
                   <Input
                     id="create-group"
                     name="groupName"

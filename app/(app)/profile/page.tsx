@@ -359,8 +359,8 @@ export default function ProfilePage() {
             ) : (
               <div className="flex flex-col gap-4">
                 <p className="text-sm text-muted-foreground">
-                  No Google account linked. Link one to sign in with a single click
-                  instead of entering your name and invite code.
+                  No Google account linked. Link one to sign back in to any of your
+                  leagues with a single click.
                 </p>
                 <Button
                   onClick={handleLinkGoogle}
@@ -387,13 +387,13 @@ export default function ProfilePage() {
               League Info
             </CardTitle>
             <CardDescription>
-              Your current league details.
+              Your current prediction league details.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">League Name</p>
+                <p className="text-xs font-medium text-muted-foreground">League</p>
                 <p className="text-sm font-medium">{profile.groups.name}</p>
               </div>
               <div>

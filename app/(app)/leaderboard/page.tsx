@@ -94,7 +94,7 @@ export default async function LeaderboardPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Leaderboard</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Full standings for your prediction league.{" "}
+          Full standings for your league.{" "}
           {completedRaces.length > 0
             ? `Scored through ${completedRaces.length} race(s).`
             : "No races scored yet."}

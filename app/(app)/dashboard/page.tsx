@@ -261,7 +261,7 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div>
-              <p className="text-sm text-muted-foreground">Group</p>
+              <p className="text-sm text-muted-foreground">League</p>
               <p className="font-medium">{session.groupName}</p>
             </div>
             <div>

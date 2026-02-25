@@ -10,7 +10,7 @@ export interface PlayerSession {
   googleLinked?: boolean
 }
 
-const SESSION_COOKIE = "f1_session"
+const SESSION_COOKIE = "f1_league_session"
 
 export async function getSession(): Promise<PlayerSession | null> {
   const cookieStore = await cookies()

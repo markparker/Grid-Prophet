@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
+import { LeagueSwitcher } from "@/components/league-switcher"
 
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -80,8 +81,8 @@ export function Nav({
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
-          <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
-            <span>{groupName}</span>
+          <div className="hidden items-center gap-2 sm:flex">
+            <LeagueSwitcher currentGroupName={groupName} />
           </div>
 
           {/* Profile avatar link */}
@@ -112,7 +113,7 @@ export function Nav({
           <button
             onClick={handleLogout}
             className="hidden rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground sm:block"
-            aria-label="Leave group"
+            aria-label="Sign out"
           >
             <LogOut className="h-4 w-4" />
           </button>
@@ -187,7 +188,7 @@ export function Nav({
               className="mt-2 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
               <LogOut className="h-4 w-4" />
-              Leave Group
+              Sign Out
             </button>
           </nav>
         </div>
