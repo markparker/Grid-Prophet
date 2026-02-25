@@ -2,10 +2,19 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getSession } from "@/lib/session"
 
+const WDC_LOCK_DATE = "2026-03-07T05:00:00Z" // Australian GP qualifying
+
 export async function POST(request: NextRequest) {
   const session = await getSession()
   if (!session) {
     return NextResponse.json({ error: "Not logged in" }, { status: 401 })
+  }
+
+  if (new Date() >= new Date(WDC_LOCK_DATE)) {
+    return NextResponse.json(
+      { error: "WDC predictions are locked. The 2026 season has begun." },
+      { status: 403 }
+    )
   }
 
   const body = await request.json()
