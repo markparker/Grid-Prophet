@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { Trophy, Target } from "lucide-react"
+import { DriverBadge } from "@/components/driver-badge"
 
 interface Driver {
   id: string
@@ -8,6 +9,7 @@ interface Driver {
   surname: string
   short_name: string
   team_name: string
+  team_id: string
 }
 
 interface Props {
@@ -46,29 +48,33 @@ export function ResultComparison({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {pole && (
+          {pole && driverMap.get(pole) && (
             <div className="mb-3 flex items-center gap-2 rounded-md bg-primary/5 px-3 py-2 border border-primary/10">
               <Target className="h-4 w-4 text-primary" />
               <span className="text-sm text-muted-foreground">Pole:</span>
-              <span className="text-sm font-medium">
-                {driverMap.get(pole)?.name} {driverMap.get(pole)?.surname}
-              </span>
-              <span className="ml-auto font-mono text-xs text-muted-foreground">
-                {driverMap.get(pole)?.short_name}
-              </span>
+              <div className="flex-1">
+                <DriverBadge
+                  teamId={driverMap.get(pole)!.team_id}
+                  shortName={driverMap.get(pole)!.short_name}
+                  firstName={driverMap.get(pole)!.name}
+                  lastName={driverMap.get(pole)!.surname}
+                  compact
+                />
+              </div>
             </div>
           )}
           <div className="flex flex-col gap-1">
             {top10Results.map((result) => {
               const driver = driverMap.get(result.driver_id)
+              if (!driver) return null
               return (
                 <div
                   key={result.driver_id}
-                  className="flex items-center gap-2 rounded-md px-3 py-1.5"
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5"
                 >
                   <span
                     className={cn(
-                      "flex h-6 w-6 items-center justify-center rounded text-xs font-bold",
+                      "flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-xs font-bold",
                       result.position === 1
                         ? "bg-primary text-primary-foreground"
                         : result.position <= 3
@@ -78,13 +84,16 @@ export function ResultComparison({
                   >
                     {result.position}
                   </span>
-                  <span className="font-mono text-xs text-muted-foreground w-8">
-                    {driver?.short_name}
-                  </span>
-                  <span className="flex-1 text-sm font-medium">
-                    {driver?.name} {driver?.surname}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
+                  <div className="flex-1">
+                    <DriverBadge
+                      teamId={driver.team_id}
+                      shortName={driver.short_name}
+                      firstName={driver.name}
+                      lastName={driver.surname}
+                      compact
+                    />
+                  </div>
+                  <span className="flex-shrink-0 text-xs text-muted-foreground">
                     {result.points} pts
                   </span>
                 </div>
