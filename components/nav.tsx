@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   User,
+  HelpCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
@@ -21,6 +22,7 @@ const links = [
   { href: "/races", label: "Races", icon: Flag },
   { href: "/wdc", label: "WDC", icon: Trophy },
   { href: "/leaderboard", label: "Leaderboard", icon: Medal },
+  { href: "/how-it-works", label: "How it works", icon: HelpCircle },
 ]
 
 export function Nav({
