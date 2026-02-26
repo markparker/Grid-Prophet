@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session"
 import { redirect } from "next/navigation"
 import { LeaderboardTable } from "@/components/leaderboard-table"
 import { PointsChart } from "@/components/points-chart"
+import { RaceLeaderboard } from "@/components/race-leaderboard"
 
 export default async function LeaderboardPage() {
   const session = await getSession()
@@ -106,6 +107,11 @@ export default async function LeaderboardPage() {
       )}
 
       <LeaderboardTable
+        leaderboard={leaderboard}
+        completedRaces={completedRaces}
+      />
+
+      <RaceLeaderboard
         leaderboard={leaderboard}
         completedRaces={completedRaces}
       />
