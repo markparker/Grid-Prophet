@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select"
 import { toast } from "sonner"
 import { Lock } from "lucide-react"
+import { DriverBadge, TEAM_META } from "@/components/driver-badge"
 
 interface Driver {
   id: string
@@ -20,6 +21,7 @@ interface Driver {
   short_name: string
   number: number
   team_name: string
+  team_id: string
 }
 
 interface ExistingPrediction {
@@ -165,22 +167,37 @@ export function RacePredictionForm({
             disabled={isLocked}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select pole sitter..." />
+              <SelectValue placeholder="Select pole sitter...">
+                {polePrediction && driverMap.get(polePrediction) && (() => {
+                  const d = driverMap.get(polePrediction)!
+                  return (
+                    <DriverBadge
+                      teamId={d.team_id}
+                      shortName={d.short_name}
+                      firstName={d.name}
+                      lastName={d.surname}
+                      number={d.number}
+                      compact
+                    />
+                  )
+                })()}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {drivers.map((d) => (
                 <SelectItem key={d.id} value={d.id}>
-                  {d.short_name} - {d.name} {d.surname} ({d.team_name})
+                  <DriverBadge
+                    teamId={d.team_id}
+                    shortName={d.short_name}
+                    firstName={d.name}
+                    lastName={d.surname}
+                    number={d.number}
+                    compact
+                  />
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {polePrediction && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Selected: {driverMap.get(polePrediction)?.name}{" "}
-              {driverMap.get(polePrediction)?.surname}
-            </p>
-          )}
         </CardContent>
       </Card>
 
@@ -216,25 +233,37 @@ export function RacePredictionForm({
                   {index + 1}
                 </span>
 
-                <div className="flex-1">
+                  <div className="flex-1">
                   <Select
                     value={selectedDriverId || ""}
                     onValueChange={(val) => handlePositionChange(index, val)}
                     disabled={isLocked}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue
-                        placeholder={label}
-                      >
-                        {selectedDriver
-                          ? `${selectedDriver.short_name} - ${selectedDriver.name} ${selectedDriver.surname}`
-                          : label}
+                      <SelectValue placeholder={label}>
+                        {selectedDriver ? (
+                          <DriverBadge
+                            teamId={selectedDriver.team_id}
+                            shortName={selectedDriver.short_name}
+                            firstName={selectedDriver.name}
+                            lastName={selectedDriver.surname}
+                            number={selectedDriver.number}
+                            compact
+                          />
+                        ) : label}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {available.map((d) => (
                         <SelectItem key={d.id} value={d.id}>
-                          {d.short_name} - {d.name} {d.surname} ({d.team_name})
+                          <DriverBadge
+                            teamId={d.team_id}
+                            shortName={d.short_name}
+                            firstName={d.name}
+                            lastName={d.surname}
+                            number={d.number}
+                            compact
+                          />
                         </SelectItem>
                       ))}
                     </SelectContent>

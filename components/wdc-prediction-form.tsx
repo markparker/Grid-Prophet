@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { GripVertical, Trophy, Lock, TrendingUp, Minus, TrendingDown, Radio } from "lucide-react"
+import { DriverBadge } from "@/components/driver-badge"
 
 interface Driver {
   id: string
@@ -15,6 +16,7 @@ interface Driver {
   short_name: string
   number: number
   team_name: string
+  team_id: string
 }
 
 interface ExistingPrediction {
@@ -250,12 +252,16 @@ export function WdcPredictionForm({
                   >
                     {index + 1}
                   </span>
-                  <span className="w-7 flex-shrink-0 font-mono text-[10px] text-muted-foreground">
-                    {driver.short_name}
-                  </span>
-                  <span className="flex-1 truncate text-xs font-medium">
-                    {driver.name} {driver.surname}
-                  </span>
+                  <div className="flex flex-1 min-w-0">
+                    <DriverBadge
+                      teamId={driver.team_id}
+                      shortName={driver.short_name}
+                      firstName={driver.name}
+                      lastName={driver.surname}
+                      number={driver.number}
+                      compact
+                    />
+                  </div>
 
                   {/* Live delta vs prediction */}
                   {isLocked && hasLiveData && delta !== null && (
@@ -390,12 +396,16 @@ export function WdcPredictionForm({
                     >
                       {standing.position}
                     </span>
-                    <span className="w-7 flex-shrink-0 font-mono text-[10px] text-muted-foreground">
-                      {driver.short_name}
-                    </span>
-                    <span className="flex-1 truncate text-xs font-medium">
-                      {driver.name} {driver.surname}
-                    </span>
+                    <div className="flex flex-1 min-w-0">
+                      <DriverBadge
+                        teamId={driver.team_id}
+                        shortName={driver.short_name}
+                        firstName={driver.name}
+                        lastName={driver.surname}
+                        number={driver.number}
+                        compact
+                      />
+                    </div>
 
                     {/* Your prediction delta vs live */}
                     {existingPrediction && delta !== null && (
