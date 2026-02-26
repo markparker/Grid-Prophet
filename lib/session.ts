@@ -11,10 +11,13 @@ export interface PlayerSession {
 }
 
 const SESSION_COOKIE = "f1_league_session"
+const LEGACY_SESSION_COOKIE = "f1_session"
 
 export async function getSession(): Promise<PlayerSession | null> {
   const cookieStore = await cookies()
-  const raw = cookieStore.get(SESSION_COOKIE)?.value
+  const raw =
+    cookieStore.get(SESSION_COOKIE)?.value ||
+    cookieStore.get(LEGACY_SESSION_COOKIE)?.value
   if (!raw) return null
   try {
     return JSON.parse(raw) as PlayerSession
