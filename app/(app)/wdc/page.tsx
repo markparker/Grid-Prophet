@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getSession } from "@/lib/session"
 import { redirect } from "next/navigation"
-import { WdcPredictionForm } from "@/components/wdc-prediction-form"
+import { WdcPageTabs } from "@/components/wdc-page-tabs"
 import { WdcCountdown } from "@/components/wdc-countdown"
 import { fetchDriverStandings } from "@/lib/f1-api"
 
@@ -15,8 +15,8 @@ export default async function WdcPage() {
   const supabase = await createClient()
   const isLocked = new Date() >= new Date(WDC_LOCK_DATE)
 
-  // Fetch drivers, existing prediction, and live standings in parallel
-  const [{ data: drivers }, { data: prediction }, liveStandings] = await Promise.all([
+  // Fetch drivers, existing prediction, live standings, and races in parallel
+  const [{ data: drivers }, { data: prediction }, liveStandings, { data: races }] = await Promise.all([
     supabase.from("drivers").select("*").order("team_name, surname"),
     supabase
       .from("wdc_predictions")
@@ -24,6 +24,7 @@ export default async function WdcPage() {
       .eq("player_id", session.playerId)
       .single(),
     fetchDriverStandings(2026),
+    supabase.from("races").select("id, round, race_name, country, race_date, results_fetched").order("round"),
   ])
 
   // Build current standings: prefer live API data, fall back to our own race_results
@@ -77,8 +78,9 @@ export default async function WdcPage() {
       {/* Countdown -- only show if not yet locked */}
       {!isLocked && <WdcCountdown lockDate={WDC_LOCK_DATE} />}
 
-      <WdcPredictionForm
+      <WdcPageTabs
         drivers={drivers || []}
+        races={races || []}
         existingPrediction={prediction}
         currentStandings={currentStandings}
         isLocked={isLocked}
