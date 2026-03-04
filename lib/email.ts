@@ -1,6 +1,12 @@
 import { Resend } from "resend"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+let _resend: Resend | null = null
+function getResend() {
+  if (!_resend) {
+    _resend = new Resend(process.env.RESEND_API_KEY)
+  }
+  return _resend
+}
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://gridprophets.com"
 
@@ -25,7 +31,7 @@ export async function sendInviteCodeEmail({
     `Join my F1 prediction league "${groupName}" on Grid Prophet!\n\nUse invite code: ${inviteCode}\n\nJoin here: ${APP_URL}`
   )
 
-  const { data, error } = await resend.emails.send({
+  const { data, error } = await getResend().emails.send({
     from: "Grid Prophet <noreply@gridprophets.com>",
     to,
     subject: `Your Grid Prophet League: ${groupName}`,

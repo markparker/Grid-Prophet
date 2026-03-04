@@ -1,5 +1,13 @@
 const BASE_URL = "https://f1api.dev/api"
 
+interface F1ApiResponse {
+  driverId?: string
+  driver?: { driverId?: string }
+  position?: number | string
+  points?: number | string
+  gridPosition?: number | string
+}
+
 interface F1RaceResult {
   driverId: string
   position: number
@@ -23,7 +31,7 @@ export async function fetchRaceResults(
     const data = await res.json()
     const results = data?.races?.results || data?.results || []
     if (!Array.isArray(results) || results.length === 0) return null
-    return results.map((r: Record<string, unknown>) => ({
+    return results.map((r: F1ApiResponse) => ({
       driverId: r.driverId || r.driver?.driverId || "",
       position: Number(r.position),
       points: Number(r.points || 0),
@@ -46,7 +54,7 @@ export async function fetchQualifyingResults(
     const results =
       data?.races?.qualifyingResults || data?.qualifyingResults || []
     if (!Array.isArray(results) || results.length === 0) return null
-    return results.map((r: Record<string, unknown>) => ({
+    return results.map((r: F1ApiResponse) => ({
       driverId: r.driverId || r.driver?.driverId || "",
       gridPosition: Number(r.position || r.gridPosition || 0),
     }))
@@ -67,7 +75,7 @@ export async function fetchDriverStandings(
     const standings =
       data?.drivers_championship || data?.standingsLists?.[0]?.driverStandings || []
     if (!Array.isArray(standings) || standings.length === 0) return null
-    return standings.map((s: Record<string, unknown>) => ({
+    return standings.map((s: F1ApiResponse) => ({
       driverId: s.driverId || s.driver?.driverId || "",
       position: Number(s.position),
       points: Number(s.points || 0),
