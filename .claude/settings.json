@@ -1,5 +1,14 @@
 {
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:openf1.org)",
+      "Bash(git:*)",
+      "Bash(npx tsc:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm install:*)"
+    ]
   }
 }
