@@ -10,8 +10,17 @@ import { SectorTimesPanel } from "@/components/telemetry/sector-times-panel"
 import { TireStrategyPanel } from "@/components/telemetry/tire-strategy-panel"
 import { PositionPanel } from "@/components/telemetry/position-panel"
 import { CarStatsReadout } from "@/components/telemetry/car-stats-readout"
-import { Radio, Gauge } from "lucide-react"
+import { Radio, Gauge, Eye } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {
+  PREVIEW_LAPS,
+  PREVIEW_STINTS,
+  PREVIEW_POSITIONS,
+  PREVIEW_INTERVALS,
+  PREVIEW_CAR_STATS,
+  PREVIEW_RACE,
+  PREVIEW_TEAM_COLOR,
+} from "@/lib/telemetry-preview-data"
 
 interface Race {
   id: string
@@ -48,6 +57,8 @@ export function TelemetryDashboard({ races, drivers }: Props) {
       .sort((a, b) => b.round - a.round) // latest first
   }, [races])
 
+  const isPreview = completedRaces.length === 0
+
   // Default to latest completed race
   const [selectedRound, setSelectedRound] = useState<number | null>(
     completedRaces[0]?.round ?? null
@@ -76,23 +87,79 @@ export function TelemetryDashboard({ races, drivers }: Props) {
   const selectedDriver = availableDrivers.find((d) => d.number === selectedDriverNumber) ?? null
   const teamColor = selectedDriver ? (TEAM_META[selectedDriver.team_id]?.color ?? "#888888") : "#888888"
 
-  // SWR hooks — only fire when both sessionKey and driverNumber are set
-  const { laps, isLoading: lapsLoading, error: lapsError } = useLaps(sessionKey, selectedDriverNumber)
-  const { stints, isLoading: stintsLoading, error: stintsError } = useStints(sessionKey, selectedDriverNumber)
-  const { positions, intervals, isLoading: positionsLoading, error: positionsError } = usePositions(sessionKey, selectedDriverNumber)
-  const { stats, isLoading: statsLoading, error: statsError } = useCarStats(sessionKey, selectedDriverNumber)
+  // SWR hooks — only fire when both sessionKey and driverNumber are set (skipped in preview)
+  const { laps, isLoading: lapsLoading, error: lapsError } = useLaps(
+    isPreview ? null : sessionKey,
+    isPreview ? null : selectedDriverNumber,
+  )
+  const { stints, isLoading: stintsLoading, error: stintsError } = useStints(
+    isPreview ? null : sessionKey,
+    isPreview ? null : selectedDriverNumber,
+  )
+  const { positions, intervals, isLoading: positionsLoading, error: positionsError } = usePositions(
+    isPreview ? null : sessionKey,
+    isPreview ? null : selectedDriverNumber,
+  )
+  const { stats, isLoading: statsLoading, error: statsError } = useCarStats(
+    isPreview ? null : sessionKey,
+    isPreview ? null : selectedDriverNumber,
+  )
 
-  // Empty state: no completed races
-  if (completedRaces.length === 0) {
+  // Preview mode: show fabricated data with all panels
+  if (isPreview) {
     return (
-      <div className="flex flex-col items-center gap-3 py-16 text-center">
-        <Gauge className="h-10 w-10 text-muted-foreground/30" />
-        <p className="text-sm text-muted-foreground">
-          No race telemetry available yet.
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Check back after the first race weekend.
-        </p>
+      <div className="flex flex-col gap-4">
+        {/* Preview banner */}
+        <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          <Eye className="h-4 w-4 shrink-0 text-amber-400" />
+          <p className="text-sm text-amber-200/90">
+            <span className="font-medium text-amber-300">Preview</span> — Sample
+            data shown. Live telemetry will appear after the first race weekend.
+          </p>
+        </div>
+
+        {/* Disabled selectors */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex h-10 w-full items-center rounded-md border border-border/30 bg-secondary/20 px-3 text-sm text-muted-foreground/50 sm:w-[240px]">
+            {PREVIEW_RACE}
+          </div>
+          <div className="flex h-10 w-full items-center rounded-md border border-border/30 bg-secondary/20 px-3 text-sm text-muted-foreground/50 sm:w-[280px]">
+            Sample Driver
+          </div>
+        </div>
+
+        {/* Preview panels with fabricated data */}
+        <div className="flex flex-col gap-4">
+          <CarStatsReadout
+            stats={PREVIEW_CAR_STATS}
+            isLoading={false}
+            error={undefined}
+            teamColor={PREVIEW_TEAM_COLOR}
+          />
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <SectorTimesPanel
+              laps={PREVIEW_LAPS}
+              isLoading={false}
+              error={undefined}
+              teamColor={PREVIEW_TEAM_COLOR}
+            />
+            <PositionPanel
+              positions={PREVIEW_POSITIONS}
+              intervals={PREVIEW_INTERVALS}
+              isLoading={false}
+              error={undefined}
+              teamColor={PREVIEW_TEAM_COLOR}
+            />
+          </div>
+
+          <TireStrategyPanel
+            stints={PREVIEW_STINTS}
+            isLoading={false}
+            error={undefined}
+            teamColor={PREVIEW_TEAM_COLOR}
+          />
+        </div>
       </div>
     )
   }
@@ -209,10 +276,7 @@ export function TelemetryDashboard({ races, drivers }: Props) {
           <CardContent className="flex flex-col items-center gap-2 py-8 text-center">
             <Gauge className="h-8 w-8 text-muted-foreground/30" />
             <p className="text-sm text-muted-foreground">
-              Telemetry data for this race is not yet available.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Data typically appears within a few hours of the session.
+              Telemetry data for this race is not available from OpenF1.
             </p>
           </CardContent>
         </Card>

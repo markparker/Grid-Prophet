@@ -5,7 +5,7 @@ interface CacheEntry<T> {
 
 const cache = new Map<string, CacheEntry<unknown>>()
 
-const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
+const DEFAULT_TTL_MS = null // permanent — historical race data is immutable
 
 export function cacheGet<T>(key: string): T | null {
   const entry = cache.get(key)
@@ -18,8 +18,9 @@ export function cacheGet<T>(key: string): T | null {
 }
 
 export function cacheSet<T>(key: string, value: T, ttlMs?: number | null): void {
+  const effectiveTtl = ttlMs === undefined ? DEFAULT_TTL_MS : ttlMs
   cache.set(key, {
     value,
-    expiresAt: ttlMs === null ? null : Date.now() + (ttlMs ?? DEFAULT_TTL_MS),
+    expiresAt: effectiveTtl === null ? null : Date.now() + effectiveTtl,
   })
 }

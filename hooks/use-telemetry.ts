@@ -6,7 +6,7 @@ import type { OpenF1Lap, OpenF1Stint, OpenF1Position, OpenF1Interval, CarStatsSu
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 const SWR_OPTIONS = {
-  dedupingInterval: 60000,
+  dedupingInterval: 300000, // 5 min — historical data is immutable
   revalidateOnFocus: false,
 }
 
