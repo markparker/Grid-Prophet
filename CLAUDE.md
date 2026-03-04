@@ -43,6 +43,28 @@ docs/plans/             # Feature planning documents
 - **API routes**: Located at `app/api/[domain]/route.ts`
 - **Types**: Colocated in the files that define them (e.g., OpenF1 types in `lib/openf1.ts`)
 
+## Environment Variables
+
+This is a shared GitHub repository. Environment variables are managed in **Vercel** (not committed to the repo). To run locally, create a `.env.local` file with the following:
+
+```bash
+# Supabase (required — app won't function without these)
+NEXT_PUBLIC_SUPABASE_URL=        # Supabase project URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY=   # Supabase anonymous/public key
+
+# Resend (required for email features; build fails without it)
+RESEND_API_KEY=                  # Resend API key for transactional emails
+
+# App URL (optional — defaults to https://gridprophets.com)
+NEXT_PUBLIC_APP_URL=             # Override for local dev, e.g. http://localhost:3000
+```
+
+**For new contributors**: Ask the repo owner to either:
+1. Share the values directly (DM or password manager), or
+2. Run `vercel env pull .env.local` from the linked Vercel project and send you the resulting file
+
+The Vercel CLI option is cleanest — the owner runs `vercel env pull` and sends the `.env.local` file, which already has all values populated for the development environment.
+
 ## Commands
 
 ```bash
