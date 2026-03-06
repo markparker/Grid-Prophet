@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
+import type { CookieOptions } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { setSession } from "@/lib/session"
 
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
     const cookiesToForward: {
       name: string
       value: string
-      options: Record<string, unknown>
+      options: CookieOptions
     }[] = []
 
     const supabase = createServerClient(
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
           getAll() {
             return cookieStore.getAll()
           },
-          setAll(cookiesToSet) {
+          setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
             cookiesToSet.forEach(({ name, value, options }) => {
               try {
                 cookieStore.set(name, value, options)
@@ -62,7 +63,7 @@ export async function GET(request: Request) {
         function redirectWithCookies(url: string) {
           const response = NextResponse.redirect(url)
           for (const { name, value, options } of cookiesToForward) {
-            response.cookies.set(name, value, options as Record<string, string>)
+            response.cookies.set(name, value, options)
           }
           return response
         }
