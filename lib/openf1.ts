@@ -87,7 +87,6 @@ export interface OpenF1Driver {
 export interface CarStatsSummary {
   topSpeed: number
   avgSpeed: number
-  drsActivations: number
   totalLaps: number
   bestLapTime: number | null
   bestSector1: number | null
@@ -192,7 +191,6 @@ export function aggregateCarStats(
     return {
       topSpeed: 0,
       avgSpeed: 0,
-      drsActivations: 0,
       totalLaps: laps?.length ?? 0,
       bestLapTime: null,
       bestSector1: null,
@@ -203,16 +201,10 @@ export function aggregateCarStats(
 
   let topSpeed = 0
   let speedSum = 0
-  let drsActivations = 0
-  let prevDrs = 0
 
   for (const d of carData) {
     if (d.speed > topSpeed) topSpeed = d.speed
     speedSum += d.speed
-    // DRS values: 10, 12, 14 = DRS active; 0, 1, 8 = inactive
-    const drsActive = d.drs >= 10
-    if (drsActive && prevDrs < 10) drsActivations++
-    prevDrs = d.drs
   }
 
   const avgSpeed = Math.round(speedSum / carData.length)
@@ -244,7 +236,6 @@ export function aggregateCarStats(
   return {
     topSpeed,
     avgSpeed,
-    drsActivations,
     totalLaps: laps?.filter((l) => !l.is_pit_out_lap).length ?? 0,
     bestLapTime,
     bestSector1,
