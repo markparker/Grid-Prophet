@@ -19,6 +19,7 @@ interface Race {
   round: number
   race_name: string
   country: string
+  city?: string
   race_date: string
   results_fetched: boolean
 }
@@ -62,10 +63,30 @@ export function TelemetryDashboard({ races, drivers }: Props) {
   // Map local race round → OpenF1 session_key by matching country name
   const sessionKey = useMemo(() => {
     if (!selectedRace || sessions.length === 0) return null
-    const raceCountry = selectedRace.country.toLowerCase()
-    const match = sessions.find(
-      (s) => s.country_name.toLowerCase() === raceCountry
+    const raceCountry = selectedRace.country.toLowerCase().trim()
+    
+    // Try exact match first
+    let match = sessions.find(
+      (s) => s.country_name.toLowerCase().trim() === raceCountry
     )
+    
+    // Try partial match (e.g. "Australia" matches "Australian")
+    if (!match) {
+      match = sessions.find(
+        (s) => s.country_name.toLowerCase().includes(raceCountry) ||
+               raceCountry.includes(s.country_name.toLowerCase())
+      )
+    }
+    
+    // Try matching by circuit/location name
+    if (!match) {
+      const raceCity = selectedRace.city?.toLowerCase().trim()
+      match = sessions.find(
+        (s) => s.location?.toLowerCase().includes(raceCity) ||
+               s.circuit_short_name?.toLowerCase().includes(raceCity)
+      )
+    }
+    
     return match?.session_key ?? null
   }, [selectedRace, sessions])
 

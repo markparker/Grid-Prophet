@@ -15,6 +15,7 @@ interface Race {
   round: number
   race_name: string
   country: string
+  city?: string
   race_date: string
   results_fetched: boolean
 }
