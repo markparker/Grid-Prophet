@@ -52,7 +52,7 @@ export async function fetchQualifyingResults(
     if (!res.ok) return null
     const data = await res.json()
     const results =
-      data?.races?.qualifyingResults || data?.qualifyingResults || []
+      data?.races?.qualyResults || data?.races?.qualifyingResults || data?.qualifyingResults || []
     if (!Array.isArray(results) || results.length === 0) return null
     return results.map((r: F1ApiResponse) => ({
       driverId: r.driverId || r.driver?.driverId || "",
