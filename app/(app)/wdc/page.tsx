@@ -29,13 +29,27 @@ export default async function WdcPage() {
   // Build current standings: prefer live API data, fall back to our own race_results
   let currentStandings: Array<{ driver_id: string; points: number; position: number; source: "live" | "local" }> = []
 
+  // Create a map to convert F1 API driver IDs to our database driver IDs
+  const driverIdMap = new Map<string, string>()
+  for (const d of drivers || []) {
+    driverIdMap.set(d.id, d.id) // direct match
+    driverIdMap.set(d.short_name.toLowerCase(), d.id) // e.g. "nor" -> "lando_norris"
+    driverIdMap.set(d.surname.toLowerCase(), d.id) // e.g. "norris" -> "lando_norris"
+    // Also handle F1 API format like "max_verstappen"
+    const nameKey = d.id.replace(/_/g, "").toLowerCase()
+    driverIdMap.set(nameKey, d.id)
+  }
+
   if (liveStandings && liveStandings.length > 0) {
-    currentStandings = liveStandings.map((s, i) => ({
-      driver_id: s.driverId,
-      points: s.points,
-      position: s.position || i + 1,
-      source: "live" as const,
-    }))
+    currentStandings = liveStandings.map((s, i) => {
+      const mappedDriverId = driverIdMap.get(s.driverId.toLowerCase()) || s.driverId
+      return {
+        driver_id: mappedDriverId,
+        points: s.points,
+        position: s.position || i + 1,
+        source: "live" as const,
+      }
+    })
   } else {
     const { data: raceResults } = await supabase
       .from("race_results")
