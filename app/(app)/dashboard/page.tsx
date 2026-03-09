@@ -121,8 +121,13 @@ export default async function DashboardPage() {
     const raceScore = raceScores.find((s) => (s as { score_type?: string }).score_type === "race")
     const poleScore = raceScores.find((s) => (s as { score_type?: string }).score_type === "pole")
     
+    console.log("[v0] Last race scores - raceScore:", JSON.stringify(raceScore))
+    console.log("[v0] Last race scores - poleScore:", JSON.stringify(poleScore))
+    
     const raceBreakdown = (raceScore as { breakdown?: { exact?: number; close?: number; total?: number } })?.breakdown
     const poleBreakdown = (poleScore as { breakdown?: { correct?: boolean } })?.breakdown
+    
+    console.log("[v0] poleBreakdown:", JSON.stringify(poleBreakdown), "correct value:", poleBreakdown?.correct)
     
     const totalPoints = 
       ((raceScore as { points?: number })?.points || 0) + 
