@@ -11,25 +11,8 @@ import { TireStrategyPanel } from "@/components/telemetry/tire-strategy-panel"
 import { PositionPanel } from "@/components/telemetry/position-panel"
 import { CarStatsReadout } from "@/components/telemetry/car-stats-readout"
 import { SpeedTrapPanel } from "@/components/telemetry/speed-trap-panel"
-import { Radio, Gauge, Eye } from "lucide-react"
+import { Radio, Gauge } from "lucide-react"
 import { cn } from "@/lib/utils"
-import {
-  PREVIEW_LAPS,
-  PREVIEW_STINTS,
-  PREVIEW_POSITIONS,
-  PREVIEW_INTERVALS,
-  PREVIEW_CAR_STATS,
-  PREVIEW_LAPS_2,
-  PREVIEW_STINTS_2,
-  PREVIEW_POSITIONS_2,
-  PREVIEW_INTERVALS_2,
-  PREVIEW_CAR_STATS_2,
-  PREVIEW_RACE,
-  PREVIEW_TEAM_COLOR,
-  PREVIEW_TEAM_COLOR_2,
-  PREVIEW_DRIVER,
-  PREVIEW_DRIVER_2,
-} from "@/lib/telemetry-preview-data"
 
 interface Race {
   id: string
@@ -65,8 +48,6 @@ export function TelemetryDashboard({ races, drivers }: Props) {
       .filter((r) => new Date(r.race_date) < now)
       .sort((a, b) => b.round - a.round) // latest first
   }, [races])
-
-  const isPreview = completedRaces.length === 0
 
   // Default to latest completed race
   const [selectedRound, setSelectedRound] = useState<number | null>(
@@ -110,138 +91,22 @@ export function TelemetryDashboard({ races, drivers }: Props) {
   )
 
   // --- SWR hooks for Driver 1 ---
-  const { laps, isLoading: lapsLoading, error: lapsError } = useLaps(
-    isPreview ? null : sessionKey,
-    isPreview ? null : selectedDriverNumber,
-  )
-  const { stints, isLoading: stintsLoading, error: stintsError } = useStints(
-    isPreview ? null : sessionKey,
-    isPreview ? null : selectedDriverNumber,
-  )
-  const { positions, intervals, isLoading: positionsLoading, error: positionsError } = usePositions(
-    isPreview ? null : sessionKey,
-    isPreview ? null : selectedDriverNumber,
-  )
-  const { stats, isLoading: statsLoading, error: statsError } = useCarStats(
-    isPreview ? null : sessionKey,
-    isPreview ? null : selectedDriverNumber,
-  )
+  const { laps, isLoading: lapsLoading, error: lapsError } = useLaps(sessionKey, selectedDriverNumber)
+  const { stints, isLoading: stintsLoading, error: stintsError } = useStints(sessionKey, selectedDriverNumber)
+  const { positions, intervals, isLoading: positionsLoading, error: positionsError } = usePositions(sessionKey, selectedDriverNumber)
+  const { stats, isLoading: statsLoading, error: statsError } = useCarStats(sessionKey, selectedDriverNumber)
 
   // --- SWR hooks for Driver 2 ---
-  const { laps: laps2 } = useLaps(
-    isPreview ? null : sessionKey,
-    isPreview ? null : selectedDriverNumber2,
-  )
-  const { stints: stints2 } = useStints(
-    isPreview ? null : sessionKey,
-    isPreview ? null : selectedDriverNumber2,
-  )
-  const { positions: positions2, intervals: intervals2 } = usePositions(
-    isPreview ? null : sessionKey,
-    isPreview ? null : selectedDriverNumber2,
-  )
-  const { stats: stats2 } = useCarStats(
-    isPreview ? null : sessionKey,
-    isPreview ? null : selectedDriverNumber2,
-  )
+  const { laps: laps2 } = useLaps(sessionKey, selectedDriverNumber2)
+  const { stints: stints2 } = useStints(sessionKey, selectedDriverNumber2)
+  const { positions: positions2, intervals: intervals2 } = usePositions(sessionKey, selectedDriverNumber2)
+  const { stats: stats2 } = useCarStats(sessionKey, selectedDriverNumber2)
 
   // Pit stops computed from stints
   const pitStops = stints.length > 0 ? stints.length - 1 : 0
   const pitStops2 = stints2.length > 0 ? stints2.length - 1 : 0
 
   const isComparing = selectedDriverNumber2 !== null
-
-  // Preview mode: show fabricated data with all panels
-  if (isPreview) {
-    return (
-      <div className="flex flex-col gap-4">
-        {/* Preview banner */}
-        <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-          <Eye className="h-4 w-4 shrink-0 text-amber-400" />
-          <p className="text-sm text-amber-200/90">
-            <span className="font-medium text-amber-300">Preview</span> — Sample
-            data shown. Live telemetry will appear after the first race weekend.
-          </p>
-        </div>
-
-        {/* Disabled selectors */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex h-10 w-full items-center rounded-md border border-border/30 bg-secondary/20 px-3 text-sm text-muted-foreground/50 sm:w-[240px]">
-            {PREVIEW_RACE}
-          </div>
-          <div className="flex h-10 w-full items-center rounded-md border border-border/30 bg-secondary/20 px-3 text-sm text-muted-foreground/50 sm:w-[220px]">
-            {PREVIEW_DRIVER.name}
-          </div>
-          <div className="flex h-10 w-full items-center rounded-md border border-border/30 bg-secondary/20 px-3 text-sm text-muted-foreground/50 sm:w-[220px]">
-            {PREVIEW_DRIVER_2.name}
-          </div>
-        </div>
-
-        {/* Preview panels with fabricated data — both drivers */}
-        <div className="flex flex-col gap-4">
-          <CarStatsReadout
-            stats={PREVIEW_CAR_STATS}
-            isLoading={false}
-            error={undefined}
-            teamColor={PREVIEW_TEAM_COLOR}
-            pitStops={PREVIEW_STINTS.length - 1}
-            stats2={PREVIEW_CAR_STATS_2}
-            teamColor2={PREVIEW_TEAM_COLOR_2}
-            pitStops2={PREVIEW_STINTS_2.length - 1}
-            driverLabel={PREVIEW_DRIVER.shortName}
-            driverLabel2={PREVIEW_DRIVER_2.shortName}
-          />
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <SectorTimesPanel
-              laps={PREVIEW_LAPS}
-              isLoading={false}
-              error={undefined}
-              teamColor={PREVIEW_TEAM_COLOR}
-              laps2={PREVIEW_LAPS_2}
-              teamColor2={PREVIEW_TEAM_COLOR_2}
-              driverLabel={PREVIEW_DRIVER.shortName}
-              driverLabel2={PREVIEW_DRIVER_2.shortName}
-            />
-            <PositionPanel
-              positions={PREVIEW_POSITIONS}
-              intervals={PREVIEW_INTERVALS}
-              isLoading={false}
-              error={undefined}
-              teamColor={PREVIEW_TEAM_COLOR}
-              positions2={PREVIEW_POSITIONS_2}
-              intervals2={PREVIEW_INTERVALS_2}
-              teamColor2={PREVIEW_TEAM_COLOR_2}
-              driverLabel={PREVIEW_DRIVER.shortName}
-              driverLabel2={PREVIEW_DRIVER_2.shortName}
-            />
-          </div>
-
-          <SpeedTrapPanel
-            laps={PREVIEW_LAPS}
-            isLoading={false}
-            error={undefined}
-            teamColor={PREVIEW_TEAM_COLOR}
-            laps2={PREVIEW_LAPS_2}
-            teamColor2={PREVIEW_TEAM_COLOR_2}
-            driverLabel={PREVIEW_DRIVER.shortName}
-            driverLabel2={PREVIEW_DRIVER_2.shortName}
-          />
-
-          <TireStrategyPanel
-            stints={PREVIEW_STINTS}
-            isLoading={false}
-            error={undefined}
-            teamColor={PREVIEW_TEAM_COLOR}
-            stints2={PREVIEW_STINTS_2}
-            teamColor2={PREVIEW_TEAM_COLOR_2}
-            driverLabel={PREVIEW_DRIVER.shortName}
-            driverLabel2={PREVIEW_DRIVER_2.shortName}
-          />
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -384,11 +249,13 @@ export function TelemetryDashboard({ races, drivers }: Props) {
             <PositionPanel
               positions={positions}
               intervals={intervals}
+              laps={laps}
               isLoading={positionsLoading}
               error={positionsError}
               teamColor={teamColor}
               positions2={isComparing ? positions2 : undefined}
               intervals2={isComparing ? intervals2 : undefined}
+              laps2={isComparing ? laps2 : undefined}
               teamColor2={isComparing ? teamColor2 : undefined}
               driverLabel={isComparing ? driverLabel : undefined}
               driverLabel2={isComparing ? driverLabel2 : undefined}

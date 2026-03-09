@@ -14,54 +14,93 @@ import {
   Legend,
 } from "recharts"
 import { TrendingUp, TrendingDown, Minus, AlertCircle, MapPin } from "lucide-react"
-import type { OpenF1Position, OpenF1Interval } from "@/lib/openf1"
+import type { OpenF1Position, OpenF1Interval, OpenF1Lap } from "@/lib/openf1"
 
 interface Props {
   positions: OpenF1Position[]
   intervals: OpenF1Interval[]
+  laps?: OpenF1Lap[]
   isLoading: boolean
   error: unknown
   teamColor: string
   positions2?: OpenF1Position[]
   intervals2?: OpenF1Interval[]
+  laps2?: OpenF1Lap[]
   teamColor2?: string
   driverLabel?: string
   driverLabel2?: string
 }
 
-function processPositions(positions: OpenF1Position[], intervals: OpenF1Interval[]) {
+function processPositions(positions: OpenF1Position[], intervals: OpenF1Interval[], laps?: OpenF1Lap[]) {
   if (positions.length === 0) {
-    return { chartData: [] as Array<{ index: number; position: number }>, startPos: null, endPos: null, posGained: 0, bestGap: null as number | null, bestInterval: null as number | null }
+    return { chartData: [] as Array<{ lap: number; position: number }>, startPos: null, endPos: null, posGained: 0, bestGap: null as number | null, bestInterval: null as number | null, totalLaps: 0 }
   }
 
   const sorted = [...positions].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   )
 
-  const first = new Date(sorted[0].date).getTime()
-  const last = new Date(sorted[sorted.length - 1].date).getTime()
-  const totalDuration = last - first
-  const targetPoints = Math.min(sorted.length, 80)
-  const interval = totalDuration / targetPoints
+  const raceStart = new Date(sorted[0].date).getTime()
+  const raceEnd = new Date(sorted[sorted.length - 1].date).getTime()
+  const raceDuration = raceEnd - raceStart
 
-  const chartData: Array<{ index: number; position: number }> = []
-  let nextTime = first
+  // Build lap boundary timestamps from lap data if available
+  const sortedLaps = laps
+    ? [...laps].filter((l) => l.date_start).sort((a, b) => a.lap_number - b.lap_number)
+    : []
 
-  for (const p of sorted) {
-    const t = new Date(p.date).getTime()
-    if (t >= nextTime) {
-      chartData.push({ index: chartData.length + 1, position: p.position })
-      nextTime = t + interval
+  // Determine total laps from lap data or estimate from position count
+  const totalLaps = sortedLaps.length > 0
+    ? Math.max(...sortedLaps.map((l) => l.lap_number))
+    : Math.max(Math.round(raceDuration / 90000), 1) // ~90s per lap estimate
+
+  // Map each position data point to a lap number
+  // Use lap start timestamps if available, otherwise interpolate linearly
+  const lapBoundaries: Array<{ lap: number; startTime: number }> = []
+  if (sortedLaps.length > 0) {
+    for (const l of sortedLaps) {
+      if (l.date_start) {
+        lapBoundaries.push({ lap: l.lap_number, startTime: new Date(l.date_start).getTime() })
+      }
     }
   }
 
-  const lastPos = sorted[sorted.length - 1]
-  if (chartData.length === 0 || chartData[chartData.length - 1].position !== lastPos.position) {
-    chartData.push({ index: chartData.length + 1, position: lastPos.position })
+  function getLapForTime(t: number): number {
+    if (lapBoundaries.length > 0) {
+      // Find the last lap whose start time is <= t
+      let lap = 1
+      for (const b of lapBoundaries) {
+        if (t >= b.startTime) lap = b.lap
+      }
+      return lap
+    }
+    // Linear interpolation fallback
+    if (raceDuration === 0) return 1
+    return Math.max(1, Math.min(totalLaps, Math.ceil(((t - raceStart) / raceDuration) * totalLaps)))
   }
 
-  const startPos = sorted[0].position
-  const endPos = lastPos.position
+  // Group positions by lap, take the last position per lap (most accurate end-of-lap position)
+  const positionByLap = new Map<number, number>()
+  for (const p of sorted) {
+    const t = new Date(p.date).getTime()
+    const lap = getLapForTime(t)
+    positionByLap.set(lap, p.position) // last write wins (sorted chronologically)
+  }
+
+  // Build chart data with lap numbers
+  const chartData: Array<{ lap: number; position: number }> = []
+  for (let lap = 1; lap <= totalLaps; lap++) {
+    const pos = positionByLap.get(lap)
+    if (pos !== undefined) {
+      chartData.push({ lap, position: pos })
+    } else if (chartData.length > 0) {
+      // Carry forward last known position for laps with no data
+      chartData.push({ lap, position: chartData[chartData.length - 1].position })
+    }
+  }
+
+  const startPos = chartData.length > 0 ? chartData[0].position : sorted[0].position
+  const endPos = chartData.length > 0 ? chartData[chartData.length - 1].position : sorted[sorted.length - 1].position
   const posGained = startPos - endPos
 
   // Best gap to leader
@@ -83,34 +122,38 @@ function processPositions(positions: OpenF1Position[], intervals: OpenF1Interval
     }
   }
 
-  return { chartData, startPos, endPos, posGained, bestGap, bestInterval }
+  return { chartData, startPos, endPos, posGained, bestGap, bestInterval, totalLaps }
 }
 
 export function PositionPanel({
-  positions, intervals, isLoading, error, teamColor,
-  positions2, intervals2, teamColor2, driverLabel, driverLabel2,
+  positions, intervals, laps, isLoading, error, teamColor,
+  positions2, intervals2, laps2, teamColor2, driverLabel, driverLabel2,
 }: Props) {
   const isComparing = positions2 && positions2.length > 0
 
-  const d1 = useMemo(() => processPositions(positions, intervals), [positions, intervals])
+  const d1 = useMemo(() => processPositions(positions, intervals, laps), [positions, intervals, laps])
   const d2 = useMemo(
-    () => (isComparing ? processPositions(positions2, intervals2 ?? []) : null),
-    [positions2, intervals2, isComparing]
+    () => (isComparing ? processPositions(positions2, intervals2 ?? [], laps2) : null),
+    [positions2, intervals2, laps2, isComparing]
   )
 
-  // Merge chart data for comparison
+  // Merge chart data by lap number for correct alignment
   const mergedChartData = useMemo(() => {
     if (!isComparing || !d2) {
-      return d1.chartData.map((d) => ({ index: d.index, pos1: d.position }))
+      return d1.chartData.map((d) => ({ lap: d.lap, pos1: d.position }))
     }
 
-    const maxLen = Math.max(d1.chartData.length, d2.chartData.length)
+    // Build a map of lap → position for each driver
+    const d1Map = new Map(d1.chartData.map((d) => [d.lap, d.position]))
+    const d2Map = new Map(d2.chartData.map((d) => [d.lap, d.position]))
+    const maxLap = Math.max(d1.totalLaps, d2.totalLaps)
+
     const merged = []
-    for (let i = 0; i < maxLen; i++) {
+    for (let lap = 1; lap <= maxLap; lap++) {
       merged.push({
-        index: i + 1,
-        pos1: d1.chartData[i]?.position ?? null,
-        pos2: d2.chartData[i]?.position ?? null,
+        lap,
+        pos1: d1Map.get(lap) ?? null,
+        pos2: d2Map.get(lap) ?? null,
       })
     }
     return merged
@@ -181,9 +224,12 @@ export function PositionPanel({
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={mergedChartData}>
                   <XAxis
-                    dataKey="index"
-                    tick={false}
+                    dataKey="lap"
+                    tick={{ fontSize: 9, fill: "oklch(0.60 0 0)" }}
                     axisLine={{ stroke: "oklch(0.27 0.005 260)" }}
+                    tickLine={false}
+                    interval="preserveStartEnd"
+                    label={{ value: "Lap", position: "insideBottomRight", offset: -5, fontSize: 9, fill: "oklch(0.50 0 0)" }}
                   />
                   <YAxis
                     reversed
@@ -209,7 +255,7 @@ export function PositionPanel({
                         : (driverLabel2 ?? "Driver 2")
                       return [`P${value}`, label]
                     }}
-                    labelFormatter={() => ""}
+                    labelFormatter={(lap: number) => `Lap ${lap}`}
                   />
                   {isComparing && (
                     <Legend
