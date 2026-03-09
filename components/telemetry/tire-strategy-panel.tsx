@@ -19,18 +19,119 @@ interface Props {
   isLoading: boolean
   error: unknown
   teamColor: string
+  stints2?: OpenF1Stint[]
+  teamColor2?: string
+  driverLabel?: string
+  driverLabel2?: string
 }
 
-export function TireStrategyPanel({ stints, isLoading, error, teamColor }: Props) {
+function StintTimeline({
+  stints,
+  totalLaps,
+  teamColor,
+  driverLabel,
+}: {
+  stints: OpenF1Stint[]
+  totalLaps: number
+  teamColor: string
+  driverLabel?: string
+}) {
+  const sorted = [...stints].sort((a, b) => a.stint_number - b.stint_number)
+
+  return (
+    <div className="flex flex-col gap-1">
+      {driverLabel && (
+        <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: teamColor }}>
+          {driverLabel}
+        </span>
+      )}
+      <div className="flex h-10 w-full gap-0.5 overflow-hidden rounded-md">
+        {sorted.map((stint) => {
+          const compound = COMPOUND_COLORS[stint.compound] ?? COMPOUND_COLORS.MEDIUM
+          const widthPercent = totalLaps > 0
+            ? ((stint.lap_end - stint.lap_start + 1) / totalLaps) * 100
+            : 100 / sorted.length
+
+          return (
+            <div
+              key={stint.stint_number}
+              className="relative flex items-center justify-center overflow-hidden text-[10px] font-bold transition-opacity hover:opacity-90"
+              style={{
+                width: `${widthPercent}%`,
+                backgroundColor: compound.bg,
+                color: compound.text,
+                minWidth: "24px",
+              }}
+              title={`${stint.compound} — Laps ${stint.lap_start}-${stint.lap_end} (${stint.tyre_age_at_start} laps old at start)`}
+            >
+              {compound.label}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function StintDetails({ stints }: { stints: OpenF1Stint[] }) {
+  const sorted = [...stints].sort((a, b) => a.stint_number - b.stint_number)
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {sorted.map((stint) => {
+        const compound = COMPOUND_COLORS[stint.compound] ?? COMPOUND_COLORS.MEDIUM
+        const lapCount = stint.lap_end - stint.lap_start + 1
+
+        return (
+          <div
+            key={stint.stint_number}
+            className="flex items-center gap-1.5 rounded-md border border-border/20 bg-secondary/20 px-2 py-1"
+          >
+            <span
+              className="flex h-4 w-4 items-center justify-center rounded-sm text-[8px] font-black"
+              style={{ backgroundColor: compound.bg, color: compound.text }}
+            >
+              {compound.label}
+            </span>
+            <span className="font-mono text-[10px] text-foreground">
+              L{stint.lap_start}–{stint.lap_end}
+            </span>
+            <span className="font-mono text-[10px] text-muted-foreground">
+              ({lapCount} laps)
+            </span>
+            {stint.tyre_age_at_start > 0 && (
+              <span className="font-mono text-[9px] text-muted-foreground/60">
+                +{stint.tyre_age_at_start} used
+              </span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+export function TireStrategyPanel({
+  stints, isLoading, error, teamColor,
+  stints2, teamColor2, driverLabel, driverLabel2,
+}: Props) {
+  const isComparing = stints2 && stints2.length > 0
+
   const sortedStints = useMemo(
     () => [...stints].sort((a, b) => a.stint_number - b.stint_number),
     [stints]
   )
 
+  const sortedStints2 = useMemo(
+    () => (isComparing ? [...stints2].sort((a, b) => a.stint_number - b.stint_number) : []),
+    [stints2, isComparing]
+  )
+
   const totalLaps = useMemo(() => {
-    if (sortedStints.length === 0) return 0
-    return Math.max(...sortedStints.map((s) => s.lap_end))
-  }, [sortedStints])
+    const max1 = sortedStints.length > 0 ? Math.max(...sortedStints.map((s) => s.lap_end)) : 0
+    const max2 = sortedStints2.length > 0 ? Math.max(...sortedStints2.map((s) => s.lap_end)) : 0
+    return Math.max(max1, max2)
+  }, [sortedStints, sortedStints2])
 
   if (error) {
     return (
@@ -51,7 +152,7 @@ export function TireStrategyPanel({ stints, isLoading, error, teamColor }: Props
             <Circle className="h-4 w-4" style={{ color: teamColor }} />
             Tire Strategy
           </CardTitle>
-          {sortedStints.length > 0 && (
+          {!isComparing && sortedStints.length > 0 && (
             <span className="font-mono text-[10px] text-muted-foreground">
               {sortedStints.length - 1} stop{sortedStints.length - 1 !== 1 ? "s" : ""}
             </span>
@@ -67,64 +168,47 @@ export function TireStrategyPanel({ stints, isLoading, error, teamColor }: Props
           </p>
         ) : (
           <div className="flex flex-col gap-3">
-            {/* Horizontal stint timeline */}
-            <div className="flex h-10 w-full gap-0.5 overflow-hidden rounded-md">
-              {sortedStints.map((stint) => {
-                const compound = COMPOUND_COLORS[stint.compound] ?? COMPOUND_COLORS.MEDIUM
-                const widthPercent = totalLaps > 0
-                  ? ((stint.lap_end - stint.lap_start + 1) / totalLaps) * 100
-                  : 100 / sortedStints.length
-
-                return (
-                  <div
-                    key={stint.stint_number}
-                    className="relative flex items-center justify-center overflow-hidden text-[10px] font-bold transition-opacity hover:opacity-90"
-                    style={{
-                      width: `${widthPercent}%`,
-                      backgroundColor: compound.bg,
-                      color: compound.text,
-                      minWidth: "24px",
-                    }}
-                    title={`${stint.compound} — Laps ${stint.lap_start}-${stint.lap_end} (${stint.tyre_age_at_start} laps old at start)`}
-                  >
-                    {compound.label}
-                  </div>
-                )
-              })}
-            </div>
+            {/* Stint timelines */}
+            <StintTimeline
+              stints={sortedStints}
+              totalLaps={totalLaps}
+              teamColor={teamColor}
+              driverLabel={isComparing ? driverLabel : undefined}
+            />
+            {isComparing && (
+              <StintTimeline
+                stints={sortedStints2}
+                totalLaps={totalLaps}
+                teamColor={teamColor2 ?? "#888888"}
+                driverLabel={driverLabel2}
+              />
+            )}
 
             {/* Stint details */}
-            <div className="flex flex-wrap gap-2">
-              {sortedStints.map((stint) => {
-                const compound = COMPOUND_COLORS[stint.compound] ?? COMPOUND_COLORS.MEDIUM
-                const lapCount = stint.lap_end - stint.lap_start + 1
-
-                return (
-                  <div
-                    key={stint.stint_number}
-                    className="flex items-center gap-1.5 rounded-md border border-border/20 bg-secondary/20 px-2 py-1"
-                  >
-                    <span
-                      className="flex h-4 w-4 items-center justify-center rounded-sm text-[8px] font-black"
-                      style={{ backgroundColor: compound.bg, color: compound.text }}
-                    >
-                      {compound.label}
+            {!isComparing ? (
+              <StintDetails stints={sortedStints} />
+            ) : (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-start gap-2">
+                  <div className="w-1 self-stretch rounded-full" style={{ backgroundColor: teamColor }} />
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[9px] font-bold uppercase" style={{ color: teamColor }}>
+                      {driverLabel ?? "Driver 1"} — {sortedStints.length - 1} stop{sortedStints.length - 1 !== 1 ? "s" : ""}
                     </span>
-                    <span className="font-mono text-[10px] text-foreground">
-                      L{stint.lap_start}–{stint.lap_end}
-                    </span>
-                    <span className="font-mono text-[10px] text-muted-foreground">
-                      ({lapCount} laps)
-                    </span>
-                    {stint.tyre_age_at_start > 0 && (
-                      <span className="font-mono text-[9px] text-muted-foreground/60">
-                        +{stint.tyre_age_at_start} used
-                      </span>
-                    )}
+                    <StintDetails stints={sortedStints} />
                   </div>
-                )
-              })}
-            </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <div className="w-1 self-stretch rounded-full" style={{ backgroundColor: teamColor2 }} />
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[9px] font-bold uppercase" style={{ color: teamColor2 }}>
+                      {driverLabel2 ?? "Driver 2"} — {sortedStints2.length - 1} stop{sortedStints2.length - 1 !== 1 ? "s" : ""}
+                    </span>
+                    <StintDetails stints={sortedStints2} />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
