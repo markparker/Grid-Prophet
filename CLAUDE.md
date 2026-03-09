@@ -27,7 +27,6 @@ lib/
   supabase/             # Supabase client (client.ts, server.ts, proxy.ts)
   openf1.ts             # OpenF1 API client + types
   openf1-cache.ts       # Server-side in-memory cache for OpenF1 data
-  telemetry-preview-data.ts  # Fabricated preview data for pre-season
   f1-api.ts             # F1 data API helpers
   scoring.ts            # Prediction scoring logic
   email.ts              # Resend email integration
@@ -76,8 +75,7 @@ pnpm lint         # ESLint
 ## Key Patterns
 
 - **Supabase auth**: Middleware in `middleware.ts` refreshes session cookies on every request via `lib/supabase/proxy.ts`
-- **Telemetry**: OpenF1 API → server-side cache (`lib/openf1-cache.ts`, permanent TTL for immutable historical data) → proxy API routes (`app/api/telemetry/`) → SWR hooks → dashboard panels
-- **Preview mode**: When no completed races exist, telemetry dashboard shows fabricated sample data from `lib/telemetry-preview-data.ts`
+- **Telemetry**: OpenF1 API → server-side cache (`lib/openf1-cache.ts`, permanent TTL for immutable historical data) → proxy API routes (`app/api/telemetry/`) → SWR hooks → dashboard panels. Lives at `/telemetry` as its own nav tab.
 - **Team colors**: Defined in `components/driver-badge.tsx` (`TEAM_META` map)
 
 ## Known Issues

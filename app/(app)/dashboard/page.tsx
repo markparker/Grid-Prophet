@@ -9,7 +9,6 @@ import { Progress } from "@/components/ui/progress"
 import { Flag, Trophy, ArrowRight, Users } from "lucide-react"
 import { InviteCodeDisplay } from "@/components/invite-code-display"
 import { SyncButton } from "@/components/sync-button"
-import { DashboardTelemetrySection } from "@/components/dashboard-telemetry-section"
 import { DashboardLastRace } from "@/components/dashboard-last-race"
 import { DashboardSeasonStats } from "@/components/dashboard-season-stats"
 
@@ -29,9 +28,7 @@ export default async function DashboardPage() {
     { data: players },
     { data: scores },
     { data: group },
-    { data: allRaces },
     { data: myScores },
-    { data: drivers },
     { count: completedRaces },
   ] = await Promise.all([
     supabase
@@ -60,14 +57,9 @@ export default async function DashboardPage() {
       .eq("id", session.groupId)
       .single(),
     supabase
-      .from("races")
-      .select("id, round, race_name, country, race_date, results_fetched")
-      .order("round"),
-    supabase
       .from("player_scores")
       .select("*")
       .eq("player_id", session.playerId),
-    supabase.from("drivers").select("*").order("team_name, surname"),
     supabase
       .from("races")
       .select("id", { count: "exact", head: true })
@@ -349,11 +341,6 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Telemetry Collapsible */}
-      <DashboardTelemetrySection
-        races={allRaces || []}
-        drivers={drivers || []}
-      />
     </div>
   )
 }
