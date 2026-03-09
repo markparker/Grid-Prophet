@@ -219,7 +219,7 @@ export function JoinForm() {
 
       {/* Join / Create tabs */}
       <Card className="bg-card border-border">
-        <Tabs defaultValue="join">
+        <Tabs defaultValue="create" className="w-full">
           <CardHeader className="pb-3">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="join">Join League</TabsTrigger>
