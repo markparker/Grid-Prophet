@@ -110,12 +110,34 @@ export default async function DashboardPage() {
   // Compute rank for current player
   const myRank = leaderboard.findIndex((p) => p.isMe) + 1
 
-  // Find my score for last race
-  const myLastRaceScores = lastRace
-    ? (myScores || []).find(
-        (s) => (s as { race_id?: string }).race_id === lastRace.id
-      ) ?? null
-    : null
+  // Find my scores for last race (combining race + pole scores)
+  const myLastRaceScores = (() => {
+    if (!lastRace) return null
+    const raceScores = (myScores || []).filter(
+      (s) => (s as { race_id?: string }).race_id === lastRace.id
+    )
+    if (raceScores.length === 0) return null
+    
+    const raceScore = raceScores.find((s) => (s as { score_type?: string }).score_type === "race")
+    const poleScore = raceScores.find((s) => (s as { score_type?: string }).score_type === "pole")
+    
+    const raceBreakdown = (raceScore as { breakdown?: { exact?: number; close?: number; total?: number } })?.breakdown
+    const poleBreakdown = (poleScore as { breakdown?: { correct?: boolean } })?.breakdown
+    
+    const totalPoints = 
+      ((raceScore as { points?: number })?.points || 0) + 
+      ((poleScore as { points?: number })?.points || 0)
+    
+    return {
+      points: totalPoints,
+      breakdown: {
+        exact: raceBreakdown?.exact ?? 0,
+        close: raceBreakdown?.close ?? 0,
+        total: raceBreakdown?.total ?? 0,
+        pole_correct: poleBreakdown?.correct ?? false,
+      },
+    }
+  })()
 
   const completed = completedRaces || 0
   const progressPercent = (completed / TOTAL_RACES) * 100
@@ -189,14 +211,7 @@ export default async function DashboardPage() {
         {lastRace ? (
           <DashboardLastRace
             lastRace={lastRace}
-            myLastRaceScores={
-              myLastRaceScores
-                ? {
-                    points: (myLastRaceScores as { points: number }).points,
-                    breakdown: (myLastRaceScores as { breakdown: { exact?: number; close?: number; total?: number; pole_correct?: boolean } | null }).breakdown,
-                  }
-                : null
-            }
+            myLastRaceScores={myLastRaceScores}
           />
         ) : (
           <Card className="border-border/30 bg-card/50">
@@ -214,14 +229,36 @@ export default async function DashboardPage() {
           </Card>
         )}
 
-        <DashboardSeasonStats
-          myScores={(myScores || []).map((s) => ({
-            points: (s as { points: number }).points,
-            breakdown: (s as { breakdown: { exact?: number; close?: number; total?: number; pole_correct?: boolean } | null }).breakdown,
-          }))}
-          rank={myRank || leaderboard.length}
-          completedRaces={completed}
-        />
+      <DashboardSeasonStats
+        myScores={(() => {
+          // Group scores by race_id and combine race + pole scores
+          const scoresByRace = new Map<string, { race?: typeof myScores[0]; pole?: typeof myScores[0] }>()
+          for (const s of myScores || []) {
+            const raceId = (s as { race_id?: string }).race_id
+            const scoreType = (s as { score_type?: string }).score_type
+            if (!raceId) continue
+            if (!scoresByRace.has(raceId)) scoresByRace.set(raceId, {})
+            const entry = scoresByRace.get(raceId)!
+            if (scoreType === "race") entry.race = s
+            if (scoreType === "pole") entry.pole = s
+          }
+          return Array.from(scoresByRace.values()).map(({ race, pole }) => {
+            const raceBreakdown = (race as { breakdown?: { exact?: number; close?: number; total?: number } } | undefined)?.breakdown
+            const poleBreakdown = (pole as { breakdown?: { correct?: boolean } } | undefined)?.breakdown
+            return {
+              points: ((race as { points?: number } | undefined)?.points || 0) + ((pole as { points?: number } | undefined)?.points || 0),
+              breakdown: {
+                exact: raceBreakdown?.exact ?? 0,
+                close: raceBreakdown?.close ?? 0,
+                total: raceBreakdown?.total ?? 0,
+                pole_correct: poleBreakdown?.correct ?? false,
+              },
+            }
+          })
+        })()}
+        rank={myRank || leaderboard.length}
+        completedRaces={completed}
+      />
       </div>
 
       {/* 3-col: Standings, Quick Actions, Your League */}
