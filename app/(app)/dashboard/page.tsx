@@ -232,10 +232,11 @@ export default async function DashboardPage() {
       <DashboardSeasonStats
         myScores={(() => {
           // Group scores by race_id and combine race + pole scores
-          const scoresByRace = new Map<string, { race?: typeof myScores[0]; pole?: typeof myScores[0] }>()
-          for (const s of myScores || []) {
-            const raceId = (s as { race_id?: string }).race_id
-            const scoreType = (s as { score_type?: string }).score_type
+          type ScoreRecord = { race_id?: string; score_type?: string; points?: number; breakdown?: Record<string, unknown> }
+          const scoresByRace = new Map<string, { race?: ScoreRecord; pole?: ScoreRecord }>()
+          for (const s of (myScores || []) as ScoreRecord[]) {
+            const raceId = s.race_id
+            const scoreType = s.score_type
             if (!raceId) continue
             if (!scoresByRace.has(raceId)) scoresByRace.set(raceId, {})
             const entry = scoresByRace.get(raceId)!
@@ -243,16 +244,16 @@ export default async function DashboardPage() {
             if (scoreType === "pole") entry.pole = s
           }
           return Array.from(scoresByRace.values()).map(({ race, pole }) => {
-            const raceBreakdown = (race as { breakdown?: Record<string, unknown> })?.breakdown as { exact?: number; close?: number; total?: number } | undefined
-            const poleBreakdown = (pole as { breakdown?: Record<string, unknown> })?.breakdown as { correct?: boolean } | undefined
+            const raceBreakdown = race?.breakdown as { exact?: number; close?: number; total?: number } | undefined
+            const poleBreakdown = pole?.breakdown as { correct?: boolean } | undefined
             return {
-              points: ((race as { points?: number })?.points || 0) + ((pole as { points?: number })?.points || 0),
+              points: (race?.points || 0) + (pole?.points || 0),
               breakdown: {
                 exact: raceBreakdown?.exact ?? 0,
                 close: raceBreakdown?.close ?? 0,
                 total: raceBreakdown?.total ?? 0,
                 pole_correct: poleBreakdown?.correct === true,
-              } as { exact: number; close: number; total: number; pole_correct: boolean }
+              }
             }
           })
         })()}
