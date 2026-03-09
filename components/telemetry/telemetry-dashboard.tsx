@@ -79,8 +79,8 @@ export function TelemetryDashboard({ races, drivers }: Props) {
     }
     
     // Try matching by circuit/location name
-    if (!match) {
-      const raceCity = selectedRace.city?.toLowerCase().trim()
+    const raceCity = selectedRace.city?.toLowerCase().trim()
+    if (!match && raceCity) {
       match = sessions.find(
         (s) => s.location?.toLowerCase().includes(raceCity) ||
                s.circuit_short_name?.toLowerCase().includes(raceCity)
