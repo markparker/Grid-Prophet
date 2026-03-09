@@ -121,13 +121,8 @@ export default async function DashboardPage() {
     const raceScore = raceScores.find((s) => (s as { score_type?: string }).score_type === "race")
     const poleScore = raceScores.find((s) => (s as { score_type?: string }).score_type === "pole")
     
-    console.log("[v0] Last race scores - raceScore:", JSON.stringify(raceScore))
-    console.log("[v0] Last race scores - poleScore:", JSON.stringify(poleScore))
-    
     const raceBreakdown = (raceScore as { breakdown?: { exact?: number; close?: number; total?: number } })?.breakdown
     const poleBreakdown = (poleScore as { breakdown?: { correct?: boolean } })?.breakdown
-    
-    console.log("[v0] poleBreakdown:", JSON.stringify(poleBreakdown), "correct value:", poleBreakdown?.correct)
     
     const totalPoints = 
       ((raceScore as { points?: number })?.points || 0) + 
@@ -248,16 +243,16 @@ export default async function DashboardPage() {
             if (scoreType === "pole") entry.pole = s
           }
           return Array.from(scoresByRace.values()).map(({ race, pole }) => {
-            const raceBreakdown = (race as { breakdown?: { exact?: number; close?: number; total?: number } } | undefined)?.breakdown
-            const poleBreakdown = (pole as { breakdown?: { correct?: boolean } } | undefined)?.breakdown
+            const raceBreakdown = (race as { breakdown?: Record<string, unknown> })?.breakdown as { exact?: number; close?: number; total?: number } | undefined
+            const poleBreakdown = (pole as { breakdown?: Record<string, unknown> })?.breakdown as { correct?: boolean } | undefined
             return {
-              points: ((race as { points?: number } | undefined)?.points || 0) + ((pole as { points?: number } | undefined)?.points || 0),
+              points: ((race as { points?: number })?.points || 0) + ((pole as { points?: number })?.points || 0),
               breakdown: {
                 exact: raceBreakdown?.exact ?? 0,
                 close: raceBreakdown?.close ?? 0,
                 total: raceBreakdown?.total ?? 0,
-                pole_correct: poleBreakdown?.correct ?? false,
-              },
+                pole_correct: poleBreakdown?.correct === true,
+              } as { exact: number; close: number; total: number; pole_correct: boolean }
             }
           })
         })()}
