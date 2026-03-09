@@ -3,7 +3,9 @@ import { getSession } from "@/lib/session"
 import { fetchSessions } from "@/lib/openf1"
 import { cacheGet, cacheSet } from "@/lib/openf1-cache"
 
-const CACHE_KEY = "openf1:sessions:2026:Race"
+// Use current year for OpenF1 data (they only have data up to current date)
+const CURRENT_YEAR = new Date().getFullYear()
+const CACHE_KEY = `openf1:sessions:${CURRENT_YEAR}:Race`
 
 export async function GET() {
   const session = await getSession()
@@ -17,7 +19,7 @@ export async function GET() {
     return NextResponse.json({ sessions: cached })
   }
 
-  const sessions = await fetchSessions(2026, "Race")
+  const sessions = await fetchSessions(CURRENT_YEAR, "Race")
   if (!sessions || sessions.length === 0) {
     return NextResponse.json({ sessions: [] })
   }

@@ -12,7 +12,7 @@ export default async function TelemetryPage() {
   const [{ data: allRaces }, { data: drivers }] = await Promise.all([
     supabase
       .from("races")
-      .select("id, round, race_name, country, race_date, results_fetched")
+      .select("id, round, race_name, country, city, race_date, results_fetched")
       .order("round"),
     supabase.from("drivers").select("*").order("team_name, surname"),
   ])
