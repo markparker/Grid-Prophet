@@ -33,29 +33,26 @@ interface Props {
 
 function processPositions(positions: OpenF1Position[], intervals: OpenF1Interval[], laps?: OpenF1Lap[]) {
   if (positions.length === 0) {
-    return { chartData: [] as Array<{ lap: number; position: number }>, startPos: null, endPos: null, posGained: 0, bestGap: null as number | null, bestInterval: null as number | null, totalLaps: 0 }
+    return { chartData: [] as Array<{ lap: number; position: number }>, gridPos: null as number | null, endPos: null as number | null, posGained: 0, bestGap: null as number | null, bestInterval: null as number | null, totalLaps: 0 }
   }
 
   const sorted = [...positions].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   )
 
-  const raceStart = new Date(sorted[0].date).getTime()
   const raceEnd = new Date(sorted[sorted.length - 1].date).getTime()
-  const raceDuration = raceEnd - raceStart
 
   // Build lap boundary timestamps from lap data if available
   const sortedLaps = laps
     ? [...laps].filter((l) => l.date_start).sort((a, b) => a.lap_number - b.lap_number)
     : []
 
-  // Determine total laps from lap data or estimate from position count
+  // Determine total laps from lap data or estimate
   const totalLaps = sortedLaps.length > 0
     ? Math.max(...sortedLaps.map((l) => l.lap_number))
-    : Math.max(Math.round(raceDuration / 90000), 1) // ~90s per lap estimate
+    : Math.max(Math.round((raceEnd - new Date(sorted[0].date).getTime()) / 90000), 1)
 
-  // Map each position data point to a lap number
-  // Use lap start timestamps if available, otherwise interpolate linearly
+  // Build lap boundaries for timestamp → lap mapping
   const lapBoundaries: Array<{ lap: number; startTime: number }> = []
   if (sortedLaps.length > 0) {
     for (const l of sortedLaps) {
@@ -67,41 +64,46 @@ function processPositions(positions: OpenF1Position[], intervals: OpenF1Interval
 
   function getLapForTime(t: number): number {
     if (lapBoundaries.length > 0) {
-      // Find the last lap whose start time is <= t
+      // Positions before lap 1 starts = grid (lap 0)
+      if (t < lapBoundaries[0].startTime) return 0
       let lap = 1
       for (const b of lapBoundaries) {
         if (t >= b.startTime) lap = b.lap
       }
       return lap
     }
-    // Linear interpolation fallback
+    // No lap data — can't distinguish grid from lap 1
+    const raceStart = new Date(sorted[0].date).getTime()
+    const raceDuration = raceEnd - raceStart
     if (raceDuration === 0) return 1
     return Math.max(1, Math.min(totalLaps, Math.ceil(((t - raceStart) / raceDuration) * totalLaps)))
   }
 
-  // Group positions by lap, take the last position per lap (most accurate end-of-lap position)
+  // Group positions by lap, take the last position per lap
   const positionByLap = new Map<number, number>()
   for (const p of sorted) {
     const t = new Date(p.date).getTime()
     const lap = getLapForTime(t)
-    positionByLap.set(lap, p.position) // last write wins (sorted chronologically)
+    positionByLap.set(lap, p.position)
   }
 
-  // Build chart data with lap numbers
+  // Grid position = lap 0 if we have lap boundaries, otherwise first position we see
+  const gridPos = positionByLap.get(0) ?? positionByLap.get(1) ?? sorted[0].position
+
+  // Build chart data starting from lap 0 (grid) through final lap
   const chartData: Array<{ lap: number; position: number }> = []
-  for (let lap = 1; lap <= totalLaps; lap++) {
+  const startLap = positionByLap.has(0) ? 0 : 1
+  for (let lap = startLap; lap <= totalLaps; lap++) {
     const pos = positionByLap.get(lap)
     if (pos !== undefined) {
       chartData.push({ lap, position: pos })
     } else if (chartData.length > 0) {
-      // Carry forward last known position for laps with no data
       chartData.push({ lap, position: chartData[chartData.length - 1].position })
     }
   }
 
-  const startPos = chartData.length > 0 ? chartData[0].position : sorted[0].position
   const endPos = chartData.length > 0 ? chartData[chartData.length - 1].position : sorted[sorted.length - 1].position
-  const posGained = startPos - endPos
+  const posGained = gridPos - endPos
 
   // Best gap to leader
   let bestGap: number | null = null
@@ -122,7 +124,7 @@ function processPositions(positions: OpenF1Position[], intervals: OpenF1Interval
     }
   }
 
-  return { chartData, startPos, endPos, posGained, bestGap, bestInterval, totalLaps }
+  return { chartData, gridPos, endPos, posGained, bestGap, bestInterval, totalLaps }
 }
 
 export function PositionPanel({
@@ -137,19 +139,20 @@ export function PositionPanel({
     [positions2, intervals2, laps2, isComparing]
   )
 
-  // Merge chart data by lap number for correct alignment
+  // Merge chart data by lap number for correct alignment (including lap 0 = grid)
   const mergedChartData = useMemo(() => {
     if (!isComparing || !d2) {
       return d1.chartData.map((d) => ({ lap: d.lap, pos1: d.position }))
     }
 
-    // Build a map of lap → position for each driver
     const d1Map = new Map(d1.chartData.map((d) => [d.lap, d.position]))
     const d2Map = new Map(d2.chartData.map((d) => [d.lap, d.position]))
     const maxLap = Math.max(d1.totalLaps, d2.totalLaps)
+    const hasGrid = d1Map.has(0) || d2Map.has(0)
 
     const merged = []
-    for (let lap = 1; lap <= maxLap; lap++) {
+    const startLap = hasGrid ? 0 : 1
+    for (let lap = startLap; lap <= maxLap; lap++) {
       merged.push({
         lap,
         pos1: d1Map.get(lap) ?? null,
@@ -229,6 +232,7 @@ export function PositionPanel({
                     axisLine={{ stroke: "oklch(0.27 0.005 260)" }}
                     tickLine={false}
                     interval="preserveStartEnd"
+                    tickFormatter={(lap: number) => lap === 0 ? "G" : String(lap)}
                     label={{ value: "Lap", position: "insideBottomRight", offset: -5, fontSize: 9, fill: "oklch(0.50 0 0)" }}
                   />
                   <YAxis
@@ -255,7 +259,7 @@ export function PositionPanel({
                         : (driverLabel2 ?? "Driver 2")
                       return [`P${value}`, label]
                     }}
-                    labelFormatter={(lap: number) => `Lap ${lap}`}
+                    labelFormatter={(lap: number) => lap === 0 ? "Grid" : `Lap ${lap}`}
                   />
                   {isComparing && (
                     <Legend
@@ -299,7 +303,7 @@ export function PositionPanel({
             {!isComparing ? (
               // Single driver stats
               <div className="flex flex-wrap gap-3">
-                <StatBox label="Start"><span className="font-mono text-sm font-bold">P{d1.startPos}</span></StatBox>
+                <StatBox label="Grid"><span className="font-mono text-sm font-bold">P{d1.gridPos}</span></StatBox>
                 <StatBox label="Finish"><span className="font-mono text-sm font-bold">P{d1.endPos}</span></StatBox>
                 <StatBox label="Gained"><GainedValue gained={d1.posGained} /></StatBox>
                 {d1.bestGap !== null && (
@@ -325,7 +329,7 @@ export function PositionPanel({
                     <span className="w-10 shrink-0 text-[9px] font-bold uppercase" style={{ color: teamColor }}>{driverLabel}</span>
                   )}
                   <div className="flex flex-wrap gap-2">
-                    <StatBox label="Start"><span className="font-mono text-xs font-bold">P{d1.startPos}</span></StatBox>
+                    <StatBox label="Grid"><span className="font-mono text-xs font-bold">P{d1.gridPos}</span></StatBox>
                     <StatBox label="Finish"><span className="font-mono text-xs font-bold">P{d1.endPos}</span></StatBox>
                     <StatBox label="Gained"><GainedValue gained={d1.posGained} /></StatBox>
                     {d1.bestInterval !== null && (
@@ -344,7 +348,7 @@ export function PositionPanel({
                       <span className="w-10 shrink-0 text-[9px] font-bold uppercase" style={{ color: teamColor2 }}>{driverLabel2}</span>
                     )}
                     <div className="flex flex-wrap gap-2">
-                      <StatBox label="Start"><span className="font-mono text-xs font-bold">P{d2.startPos}</span></StatBox>
+                      <StatBox label="Grid"><span className="font-mono text-xs font-bold">P{d2.gridPos}</span></StatBox>
                       <StatBox label="Finish"><span className="font-mono text-xs font-bold">P{d2.endPos}</span></StatBox>
                       <StatBox label="Gained"><GainedValue gained={d2.posGained} /></StatBox>
                       {d2.bestInterval !== null && (
