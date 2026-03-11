@@ -58,8 +58,9 @@ export function JoinForm() {
     const form = new FormData(e.currentTarget)
     const inviteCode = (form.get("inviteCode") as string).trim()
     const playerName = (form.get("playerName") as string).trim()
+    const joinEmail = (form.get("joinEmail") as string).trim()
 
-    if (!inviteCode || !playerName) {
+    if (!inviteCode || !playerName || !joinEmail) {
       toast.error("Please fill in all fields")
       setLoading(false)
       return
@@ -73,8 +74,8 @@ export function JoinForm() {
           action: "join",
           inviteCode,
           playerName,
+          email: googleEmail || joinEmail,
           googleId: googleId || undefined,
-          email: googleEmail || undefined,
           avatarUrl: googleAvatarUrl || undefined,
         }),
       })
@@ -253,6 +254,24 @@ export function JoinForm() {
                     required
                   />
                 </div>
+                {!googleEmail && (
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="join-email">Your Email</Label>
+                    <Input
+                      id="join-email"
+                      name="joinEmail"
+                      type="email"
+                      placeholder="e.g., lewis@example.com"
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      We&apos;ll send you the league details to share with friends.
+                    </p>
+                  </div>
+                )}
+                {googleEmail && (
+                  <input type="hidden" name="joinEmail" value={googleEmail} />
+                )}
                 <Button type="submit" disabled={loading} className="w-full">
                   {loading ? "Joining..." : "Join League"}
                 </Button>

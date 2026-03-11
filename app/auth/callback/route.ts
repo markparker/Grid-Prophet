@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr"
 import type { CookieOptions } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { setSession } from "@/lib/session"
+import { sendLeagueWelcomeEmail } from "@/lib/email"
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -95,6 +96,8 @@ export async function GET(request: Request) {
               .eq("id", player.id)
           }
 
+          const isFirstGoogleSignIn = !player.google_id
+
           await setSession({
             playerId: player.id,
             groupId: player.group_id,
@@ -104,6 +107,19 @@ export async function GET(request: Request) {
             email: player.email || email,
             googleLinked: true,
           })
+
+          // Only send welcome email the very first time they connect Google
+          if (isFirstGoogleSignIn) {
+            const playerEmail = player.email || email
+            if (playerEmail) {
+              sendLeagueWelcomeEmail({
+                to: playerEmail,
+                playerName: player.name,
+                groupName: player.groups.name,
+                inviteCode: player.groups.invite_code,
+              }).catch(() => {/* ignore email failures */})
+            }
+          }
 
           // If user has multiple leagues, send them to a league picker
           if (existingPlayers.length > 1) {
