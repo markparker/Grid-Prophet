@@ -96,6 +96,8 @@ export async function GET(request: Request) {
               .eq("id", player.id)
           }
 
+          const isFirstGoogleSignIn = !player.google_id
+
           await setSession({
             playerId: player.id,
             groupId: player.group_id,
@@ -106,15 +108,17 @@ export async function GET(request: Request) {
             googleLinked: true,
           })
 
-          // Send league info email (non-blocking)
-          const playerEmail = player.email || email
-          if (playerEmail) {
-            sendLeagueWelcomeEmail({
-              to: playerEmail,
-              playerName: player.name,
-              groupName: player.groups.name,
-              inviteCode: player.groups.invite_code,
-            }).catch(() => {/* ignore email failures */})
+          // Only send welcome email the very first time they connect Google
+          if (isFirstGoogleSignIn) {
+            const playerEmail = player.email || email
+            if (playerEmail) {
+              sendLeagueWelcomeEmail({
+                to: playerEmail,
+                playerName: player.name,
+                groupName: player.groups.name,
+                inviteCode: player.groups.invite_code,
+              }).catch(() => {/* ignore email failures */})
+            }
           }
 
           // If user has multiple leagues, send them to a league picker
