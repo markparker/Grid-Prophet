@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { setSession } from "@/lib/session"
-import { sendInviteCodeEmail } from "@/lib/email"
+import { sendInviteCodeEmail, sendLeagueWelcomeEmail } from "@/lib/email"
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
@@ -139,6 +139,17 @@ export async function POST(request: NextRequest) {
       email: player.email || "",
       googleLinked: !!player.google_id,
     })
+
+    // Send league info email to the new member (non-blocking)
+    const joinEmail = player.email || email
+    if (joinEmail) {
+      sendLeagueWelcomeEmail({
+        to: joinEmail,
+        playerName: player.name,
+        groupName: group.name,
+        inviteCode: group.invite_code,
+      }).catch(() => {/* ignore email failures */})
+    }
 
     return NextResponse.json({ group, player })
   }

@@ -93,3 +93,68 @@ export async function sendInviteCodeEmail({
 
   return data
 }
+
+export async function sendLeagueWelcomeEmail({
+  to,
+  playerName,
+  groupName,
+  inviteCode,
+}: {
+  to: string
+  playerName: string
+  groupName: string
+  inviteCode: string
+}) {
+  const shareMessage = encodeURIComponent(
+    `Join my F1 prediction league "${groupName}" on Grid Prophet! Use invite code: ${inviteCode}\n${APP_URL}`
+  )
+  const emailSubject = encodeURIComponent(`Join my F1 prediction league: ${groupName}`)
+  const emailBody = encodeURIComponent(
+    `Join my F1 prediction league "${groupName}" on Grid Prophet!\n\nUse invite code: ${inviteCode}\n\nJoin here: ${APP_URL}`
+  )
+
+  const { data, error } = await getResend().emails.send({
+    from: "Grid Prophet <noreply@gridprophets.com>",
+    to,
+    subject: `Welcome back to Grid Prophet — ${groupName}`,
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; background: #0a0a0a; color: #fafafa; padding: 32px; border-radius: 12px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h1 style="color: #e11d48; font-size: 24px; margin: 0;">Grid Prophet</h1>
+          <p style="color: #a1a1aa; font-size: 14px; margin-top: 4px;">F1 Prediction League</p>
+        </div>
+        <p style="color: #fafafa; font-size: 16px; margin: 0 0 20px 0;">Hey ${playerName}, welcome back!</p>
+        <p style="color: #a1a1aa; font-size: 14px; line-height: 1.6; margin: 0 0 24px 0;">
+          You just signed in with Google. Here is a reminder of your league details so you can share it with friends.
+        </p>
+        <div style="background: #18181b; border-radius: 8px; padding: 24px; text-align: center; margin-bottom: 24px;">
+          <p style="color: #a1a1aa; font-size: 14px; margin: 0 0 8px 0;">Your league</p>
+          <h2 style="color: #fafafa; font-size: 20px; margin: 0 0 16px 0;">${groupName}</h2>
+          <p style="color: #a1a1aa; font-size: 13px; margin: 0 0 8px 0;">Invite code</p>
+          <div style="background: #0a0a0a; border: 2px dashed #e11d48; border-radius: 8px; padding: 16px; display: inline-block;">
+            <span style="font-family: 'Courier New', monospace; font-size: 32px; font-weight: bold; color: #e11d48; letter-spacing: 4px;">${inviteCode}</span>
+          </div>
+        </div>
+        <div style="text-align: center; margin-bottom: 24px;">
+          <a href="${APP_URL}/dashboard" style="display: inline-block; background: #e11d48; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 8px; margin-bottom: 16px;">Go to Dashboard</a>
+          <p style="color: #a1a1aa; font-size: 13px; margin: 12px 0 0 0;">Share your league with friends:</p>
+          <div style="margin-top: 8px;">
+            <a href="https://wa.me/?text=${shareMessage}" target="_blank" style="display: inline-block; background: #25D366; color: #ffffff; font-size: 13px; font-weight: 600; text-decoration: none; padding: 10px 16px; border-radius: 6px; margin: 4px;">WhatsApp</a>
+            <a href="https://twitter.com/intent/tweet?text=${shareMessage}" target="_blank" style="display: inline-block; background: #27272a; color: #fafafa; font-size: 13px; font-weight: 600; text-decoration: none; padding: 10px 16px; border-radius: 6px; margin: 4px;">X / Twitter</a>
+            <a href="mailto:?subject=${emailSubject}&body=${emailBody}" style="display: inline-block; background: #27272a; color: #fafafa; font-size: 13px; font-weight: 600; text-decoration: none; padding: 10px 16px; border-radius: 6px; margin: 4px;">Email</a>
+          </div>
+        </div>
+        <hr style="border: none; border-top: 1px solid #27272a; margin: 24px 0;" />
+        <p style="color: #71717a; font-size: 12px; text-align: center; margin: 0;">
+          Predict pole positions, race results &amp; the World Drivers&apos; Championship.
+        </p>
+      </div>
+    `,
+  })
+
+  if (error) {
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
