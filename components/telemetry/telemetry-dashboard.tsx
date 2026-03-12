@@ -305,34 +305,36 @@ export function TelemetryDashboard({ races, drivers, raceResults }: Props) {
             driverLabel2={isComparing ? driverLabel2 : undefined}
           />
 
-          {/* Sector Times + Position grid */}
-          <div className="grid gap-4 lg:grid-cols-2">
-            <SectorTimesPanel
-              laps={laps}
-              isLoading={lapsLoading}
-              error={lapsError}
-              teamColor={teamColor}
-              laps2={isComparing ? laps2 : undefined}
-              teamColor2={isComparing ? teamColor2 : undefined}
-              driverLabel={isComparing ? driverLabel : undefined}
-              driverLabel2={isComparing ? driverLabel2 : undefined}
-              raceControl={raceControl}
-            />
-            <PositionPanel
-              positions={positions}
-              intervals={intervals}
-              laps={laps}
-              isLoading={positionsLoading}
-              error={positionsError}
-              teamColor={teamColor}
-              positions2={isComparing ? positions2 : undefined}
-              intervals2={isComparing ? intervals2 : undefined}
-              laps2={isComparing ? laps2 : undefined}
-              teamColor2={isComparing ? teamColor2 : undefined}
-              driverLabel={isComparing ? driverLabel : undefined}
-              driverLabel2={isComparing ? driverLabel2 : undefined}
-            />
-          </div>
+          {/* Race Position — full width */}
+          <PositionPanel
+            positions={positions}
+            intervals={intervals}
+            laps={laps}
+            isLoading={positionsLoading}
+            error={positionsError}
+            teamColor={teamColor}
+            positions2={isComparing ? positions2 : undefined}
+            intervals2={isComparing ? intervals2 : undefined}
+            laps2={isComparing ? laps2 : undefined}
+            teamColor2={isComparing ? teamColor2 : undefined}
+            driverLabel={isComparing ? driverLabel : undefined}
+            driverLabel2={isComparing ? driverLabel2 : undefined}
+          />
+
+          {/* Sector Times — full width */}
+          <SectorTimesPanel
+            laps={laps}
+            isLoading={lapsLoading}
+            error={lapsError}
+            teamColor={teamColor}
+            laps2={isComparing ? laps2 : undefined}
+            teamColor2={isComparing ? teamColor2 : undefined}
+            driverLabel={isComparing ? driverLabel : undefined}
+            driverLabel2={isComparing ? driverLabel2 : undefined}
+            raceControl={raceControl}
+            pits={pits}
+            pits2={isComparing ? pits2 : undefined}
+          />
 
           {/* Battery & Energy — full width */}
           <EnergyPanel
