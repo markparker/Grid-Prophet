@@ -17,6 +17,23 @@ export default async function TelemetryPage() {
     supabase.from("drivers").select("*").order("team_name, surname"),
   ])
 
+  // Find the latest completed race and fetch its results for default driver selection
+  const now = new Date()
+  const completedRaces = (allRaces || [])
+    .filter((r) => new Date(r.race_date) < now)
+    .sort((a, b) => b.round - a.round)
+  const latestRace = completedRaces[0]
+
+  let raceResults: Array<{ driver_id: string; position: number }> = []
+  if (latestRace?.results_fetched) {
+    const { data } = await supabase
+      .from("race_results")
+      .select("driver_id, position")
+      .eq("race_id", latestRace.id)
+      .order("position")
+    raceResults = data || []
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
@@ -29,6 +46,7 @@ export default async function TelemetryPage() {
       <TelemetryPageClient
         races={allRaces || []}
         drivers={drivers || []}
+        raceResults={raceResults}
       />
     </div>
   )
