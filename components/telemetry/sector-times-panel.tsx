@@ -74,12 +74,26 @@ function extractRaceEvents(raceControl: OpenF1RaceControl[]): RaceEvent[] {
     const msg = rc.message.toUpperCase()
     const cat = rc.category.toUpperCase()
 
+    // Skip ending/clearing messages — only show when events are deployed
+    if (
+      msg.includes("ENDING") ||
+      msg.includes("CLEAR") ||
+      msg.includes("DISABLED") ||
+      msg.includes("OFF") ||
+      msg.includes("RESUMED") ||
+      msg.includes("CHEQUERED") ||
+      msg.includes("GREEN LIGHT")
+    ) continue
+
     let type: RaceEvent["type"] | null = null
-    if (cat === "SAFETYCAR" || msg.includes("SAFETY CAR DEPLOYED") || msg.includes("SAFETY CAR")) {
-      type = "safety_car"
-    } else if (msg.includes("VIRTUAL SAFETY CAR") || msg.includes("VSC")) {
+
+    // Check VSC before SC since "VIRTUAL SAFETY CAR" contains "SAFETY CAR"
+    if (msg.includes("VIRTUAL SAFETY CAR") || msg.includes("VSC")) {
       type = "vsc"
-    } else if (rc.flag === "RED" || msg.includes("RED FLAG")) {
+    } else if (cat === "SAFETYCAR" || msg.includes("SAFETY CAR DEPLOYED") || msg.includes("SAFETY CAR")) {
+      type = "safety_car"
+    } else if (msg.includes("RED FLAG") && rc.flag === "RED") {
+      // Only match explicit "RED FLAG" messages, not just flag=RED (which can be session status)
       type = "red_flag"
     } else if (
       cat === "FLAG" &&
