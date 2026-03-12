@@ -49,7 +49,7 @@ function formatTime(seconds: number | null): string {
 
 function processLaps(laps: OpenF1Lap[]) {
   const raceLaps = laps
-    .filter((l) => !l.is_pit_out_lap && l.lap_number > 0)
+    .filter((l) => l.lap_number > 0)
     .sort((a, b) => a.lap_number - b.lap_number)
 
   let bestS1 = Infinity
@@ -58,13 +58,19 @@ function processLaps(laps: OpenF1Lap[]) {
   let bestLap = Infinity
 
   for (const lap of raceLaps) {
+    // Only consider non-pit-out laps for best times
+    if (lap.is_pit_out_lap) continue
     if (lap.duration_sector_1 && lap.duration_sector_1 < bestS1) bestS1 = lap.duration_sector_1
     if (lap.duration_sector_2 && lap.duration_sector_2 < bestS2) bestS2 = lap.duration_sector_2
     if (lap.duration_sector_3 && lap.duration_sector_3 < bestS3) bestS3 = lap.duration_sector_3
     if (lap.lap_duration && lap.lap_duration < bestLap) bestLap = lap.lap_duration
   }
 
-  return { raceLaps, bestS1, bestS2, bestS3, bestLap }
+  const maxLap = raceLaps.length > 0
+    ? Math.max(...raceLaps.map((l) => l.lap_number))
+    : 0
+
+  return { raceLaps, bestS1, bestS2, bestS3, bestLap, maxLap }
 }
 
 function isEndMessage(msg: string): boolean {
@@ -451,11 +457,9 @@ export function SectorTimesPanel({
                       for (const l of d2.raceLaps) d2Map.set(l.lap_number, l)
                     }
 
-                    const allLapNumbers = new Set(d1.raceLaps.map((l) => l.lap_number))
-                    if (isComparing && d2) {
-                      for (const l of d2.raceLaps) allLapNumbers.add(l.lap_number)
-                    }
-                    const sorted = Array.from(allLapNumbers).sort((a, b) => a - b)
+                    // Always show all laps from 1 to max across both drivers
+                    const maxLap = Math.max(d1.maxLap, d2?.maxLap ?? 0)
+                    const sorted = Array.from({ length: maxLap }, (_, i) => i + 1)
 
                     const d1Map = new Map<number, OpenF1Lap>()
                     for (const l of d1.raceLaps) d1Map.set(l.lap_number, l)
