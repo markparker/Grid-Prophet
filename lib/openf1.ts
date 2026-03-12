@@ -43,6 +43,16 @@ export interface OpenF1Stint {
   session_key: number
 }
 
+export interface OpenF1Pit {
+  driver_number: number
+  lap_number: number
+  lane_duration: number | null
+  stop_duration: number | null
+  date: string
+  meeting_key: number
+  session_key: number
+}
+
 export interface OpenF1Position {
   driver_number: number
   position: number
@@ -155,6 +165,16 @@ export async function fetchStints(
   })
 }
 
+export async function fetchPit(
+  sessionKey: number,
+  driverNumber: number
+): Promise<OpenF1Pit[] | null> {
+  return fetchOpenF1<OpenF1Pit>("/pit", {
+    session_key: sessionKey,
+    driver_number: driverNumber,
+  })
+}
+
 export async function fetchPositions(
   sessionKey: number,
   driverNumber: number
@@ -207,11 +227,15 @@ export function aggregateCarStats(
   carData: OpenF1CarData[],
   laps: OpenF1Lap[] | null
 ): CarStatsSummary {
+  const maxLapNumber = laps && laps.length > 0
+    ? Math.max(...laps.map((l) => l.lap_number))
+    : 0
+
   if (carData.length === 0) {
     return {
       topSpeed: 0,
       avgSpeed: 0,
-      totalLaps: laps?.length ?? 0,
+      totalLaps: maxLapNumber,
       bestLapTime: null,
       bestSector1: null,
       bestSector2: null,
@@ -256,7 +280,7 @@ export function aggregateCarStats(
   return {
     topSpeed,
     avgSpeed,
-    totalLaps: laps?.filter((l) => !l.is_pit_out_lap).length ?? 0,
+    totalLaps: maxLapNumber,
     bestLapTime,
     bestSector1,
     bestSector2,
