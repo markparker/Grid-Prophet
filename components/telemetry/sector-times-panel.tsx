@@ -14,13 +14,15 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  ReferenceArea,
   Legend,
 } from "recharts"
 import { Timer, AlertCircle } from "lucide-react"
 import type { OpenF1Lap, OpenF1RaceControl } from "@/lib/openf1"
 
 interface RaceEvent {
-  lap: number
+  lapStart: number
+  lapEnd: number | null // null = single-lap event or still ongoing
   type: "safety_car" | "vsc" | "red_flag" | "incident"
   message: string
 }
@@ -65,26 +67,34 @@ function processLaps(laps: OpenF1Lap[]) {
   return { raceLaps, bestS1, bestS2, bestS3, bestLap }
 }
 
+function isEndMessage(msg: string): boolean {
+  return (
+    msg.includes("ENDING") ||
+    msg.includes("CLEAR") ||
+    msg.includes("DISABLED") ||
+    msg.includes("OFF") ||
+    msg.includes("RESUMED") ||
+    msg.includes("GREEN LIGHT")
+  )
+}
+
 function extractRaceEvents(raceControl: OpenF1RaceControl[]): RaceEvent[] {
   const events: RaceEvent[] = []
-  const seen = new Set<string>()
+  // Track open events by type so we can pair with their ending message
+  const openEvents = new Map<RaceEvent["type"], RaceEvent>()
 
-  for (const rc of raceControl) {
+  // Sort by date to ensure chronological order
+  const sorted = [...raceControl].sort((a, b) => a.date.localeCompare(b.date))
+
+  for (const rc of sorted) {
     if (!rc.lap_number) continue
     const msg = rc.message.toUpperCase()
     const cat = rc.category.toUpperCase()
 
-    // Skip ending/clearing messages — only show when events are deployed
-    if (
-      msg.includes("ENDING") ||
-      msg.includes("CLEAR") ||
-      msg.includes("DISABLED") ||
-      msg.includes("OFF") ||
-      msg.includes("RESUMED") ||
-      msg.includes("CHEQUERED") ||
-      msg.includes("GREEN LIGHT")
-    ) continue
+    // Skip chequered flag
+    if (msg.includes("CHEQUERED")) continue
 
+    // Determine event type
     let type: RaceEvent["type"] | null = null
 
     // Check VSC before SC since "VIRTUAL SAFETY CAR" contains "SAFETY CAR"
@@ -93,7 +103,6 @@ function extractRaceEvents(raceControl: OpenF1RaceControl[]): RaceEvent[] {
     } else if (cat === "SAFETYCAR" || msg.includes("SAFETY CAR DEPLOYED") || msg.includes("SAFETY CAR")) {
       type = "safety_car"
     } else if (msg.includes("RED FLAG") && rc.flag === "RED") {
-      // Only match explicit "RED FLAG" messages, not just flag=RED (which can be session status)
       type = "red_flag"
     } else if (
       cat === "FLAG" &&
@@ -103,12 +112,28 @@ function extractRaceEvents(raceControl: OpenF1RaceControl[]): RaceEvent[] {
       type = "incident"
     }
 
-    if (type) {
-      const key = `${rc.lap_number}-${type}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        events.push({ lap: rc.lap_number, type, message: rc.message })
+    if (!type) continue
+
+    if (isEndMessage(msg)) {
+      // Close the matching open event with this lap as the end
+      const open = openEvents.get(type)
+      if (open && rc.lap_number > open.lapStart) {
+        open.lapEnd = rc.lap_number
       }
+      openEvents.delete(type)
+    } else {
+      // If there's already an open event of this type, close it first
+      if (openEvents.has(type)) {
+        openEvents.delete(type)
+      }
+      const event: RaceEvent = {
+        lapStart: rc.lap_number,
+        lapEnd: null,
+        type,
+        message: rc.message,
+      }
+      events.push(event)
+      openEvents.set(type, event)
     }
   }
 
@@ -273,29 +298,47 @@ export function SectorTimesPanel({
                       />
                     )}
                     {/* Safety car / incident markers */}
-                    {raceEvents.map((evt, i) => (
-                      <ReferenceLine
-                        key={`${evt.lap}-${evt.type}-${i}`}
-                        x={evt.lap}
-                        stroke={
-                          evt.type === "red_flag" ? "#ef4444" :
-                          evt.type === "safety_car" ? "#f59e0b" :
-                          evt.type === "vsc" ? "#f59e0b" :
-                          "#eab308"
-                        }
-                        strokeDasharray={evt.type === "vsc" ? "4 2" : undefined}
-                        strokeWidth={1}
-                        strokeOpacity={0.7}
-                        label={{
-                          value: evt.type === "safety_car" ? "SC" :
-                                 evt.type === "vsc" ? "VSC" :
-                                 evt.type === "red_flag" ? "RED" : "!",
-                          position: "top",
-                          fontSize: 8,
-                          fill: evt.type === "red_flag" ? "#ef4444" : "#f59e0b",
-                        }}
-                      />
-                    ))}
+                    {raceEvents.map((evt, i) => {
+                      const color =
+                        evt.type === "red_flag" ? "#ef4444" :
+                        evt.type === "safety_car" ? "#f59e0b" :
+                        evt.type === "vsc" ? "#f59e0b" :
+                        "#eab308"
+                      const label =
+                        evt.type === "safety_car" ? "SC" :
+                        evt.type === "vsc" ? "VSC" :
+                        evt.type === "red_flag" ? "RED" : "!"
+                      const isDashed = evt.type === "vsc" || evt.type === "incident"
+
+                      return [
+                        // Start line
+                        <ReferenceLine
+                          key={`line-${evt.lapStart}-${evt.type}-${i}`}
+                          x={evt.lapStart}
+                          stroke={color}
+                          strokeDasharray={isDashed ? "4 2" : undefined}
+                          strokeWidth={1}
+                          strokeOpacity={0.7}
+                          label={{
+                            value: label,
+                            position: "top",
+                            fontSize: 8,
+                            fill: color,
+                          }}
+                        />,
+                        // Shaded area for multi-lap events
+                        evt.lapEnd && evt.lapEnd > evt.lapStart ? (
+                          <ReferenceArea
+                            key={`area-${evt.lapStart}-${evt.type}-${i}`}
+                            x1={evt.lapStart}
+                            x2={evt.lapEnd}
+                            fill={color}
+                            fillOpacity={0.08}
+                            strokeOpacity={0}
+                          />
+                        ) : null,
+                      ]
+                    })}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -419,8 +462,11 @@ export function SectorTimesPanel({
 
                     const eventLaps = new Map<number, RaceEvent["type"]>()
                     for (const evt of raceEvents) {
-                      if (!eventLaps.has(evt.lap) || evt.type === "red_flag" || evt.type === "safety_car") {
-                        eventLaps.set(evt.lap, evt.type)
+                      const end = evt.lapEnd ?? evt.lapStart
+                      for (let l = evt.lapStart; l <= end; l++) {
+                        if (!eventLaps.has(l) || evt.type === "red_flag" || evt.type === "safety_car") {
+                          eventLaps.set(l, evt.type)
+                        }
                       }
                     }
 

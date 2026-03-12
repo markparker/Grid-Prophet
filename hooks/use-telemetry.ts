@@ -1,7 +1,7 @@
 "use client"
 
 import useSWR from "swr"
-import type { OpenF1Lap, OpenF1Stint, OpenF1Position, OpenF1Interval, OpenF1RaceControl, CarStatsSummary } from "@/lib/openf1"
+import type { OpenF1Lap, OpenF1Stint, OpenF1Pit, OpenF1Position, OpenF1Interval, OpenF1RaceControl, CarStatsSummary } from "@/lib/openf1"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -58,6 +58,23 @@ export function useStints(sessionKey: number | null, driverNumber: number | null
 
   return {
     stints: data?.stints ?? [],
+    isLoading,
+    error,
+  }
+}
+
+export function usePit(sessionKey: number | null, driverNumber: number | null) {
+  const shouldFetch = sessionKey && driverNumber
+  const { data, error, isLoading } = useSWR<{ pits: OpenF1Pit[] }>(
+    shouldFetch
+      ? `/api/telemetry/pit?session_key=${sessionKey}&driver_number=${driverNumber}`
+      : null,
+    fetcher,
+    SWR_OPTIONS
+  )
+
+  return {
+    pits: data?.pits ?? [],
     isLoading,
     error,
   }

@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DriverBadge, TEAM_META } from "@/components/driver-badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useTelemetrySessions, useLaps, useStints, usePositions, useCarStats, useRaceControl, useEnergy } from "@/hooks/use-telemetry"
+import { useTelemetrySessions, useLaps, useStints, usePit, usePositions, useCarStats, useRaceControl, useEnergy } from "@/hooks/use-telemetry"
 import { SectorTimesPanel } from "@/components/telemetry/sector-times-panel"
 import { TireStrategyPanel } from "@/components/telemetry/tire-strategy-panel"
 import { PositionPanel } from "@/components/telemetry/position-panel"
@@ -146,6 +146,7 @@ export function TelemetryDashboard({ races, drivers, raceResults }: Props) {
   const { positions, intervals, isLoading: positionsLoading, error: positionsError } = usePositions(sessionKey, selectedDriverNumber)
   const { stats, isLoading: statsLoading, error: statsError } = useCarStats(sessionKey, selectedDriverNumber)
   const { energy, isLoading: energyLoading, error: energyError } = useEnergy(sessionKey, selectedDriverNumber)
+  const { pits } = usePit(sessionKey, selectedDriverNumber)
 
   // --- SWR hooks for Driver 2 ---
   const { laps: laps2 } = useLaps(sessionKey, selectedDriverNumber2)
@@ -153,13 +154,14 @@ export function TelemetryDashboard({ races, drivers, raceResults }: Props) {
   const { positions: positions2, intervals: intervals2 } = usePositions(sessionKey, selectedDriverNumber2)
   const { stats: stats2 } = useCarStats(sessionKey, selectedDriverNumber2)
   const { energy: energy2 } = useEnergy(sessionKey, selectedDriverNumber2)
+  const { pits: pits2 } = usePit(sessionKey, selectedDriverNumber2)
 
   // --- Race control data (shared across widgets) ---
   const { raceControl } = useRaceControl(sessionKey)
 
-  // Pit stops computed from stints
-  const pitStops = stints.length > 0 ? stints.length - 1 : 0
-  const pitStops2 = stints2.length > 0 ? stints2.length - 1 : 0
+  // Pit stops from OpenF1 /pit endpoint (one record per stop)
+  const pitStops = pits.length
+  const pitStops2 = pits2.length
 
   const isComparing = selectedDriverNumber2 !== null
 
