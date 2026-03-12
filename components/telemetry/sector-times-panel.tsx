@@ -18,7 +18,7 @@ import {
   Legend,
 } from "recharts"
 import { Timer, AlertCircle } from "lucide-react"
-import type { OpenF1Lap, OpenF1RaceControl } from "@/lib/openf1"
+import type { OpenF1Lap, OpenF1Pit, OpenF1RaceControl } from "@/lib/openf1"
 
 interface RaceEvent {
   lapStart: number
@@ -37,6 +37,8 @@ interface Props {
   driverLabel?: string
   driverLabel2?: string
   raceControl?: OpenF1RaceControl[]
+  pits?: OpenF1Pit[]
+  pits2?: OpenF1Pit[]
 }
 
 function formatTime(seconds: number | null): string {
@@ -149,7 +151,7 @@ function extractRaceEvents(raceControl: OpenF1RaceControl[]): RaceEvent[] {
 export function SectorTimesPanel({
   laps, isLoading, error, teamColor,
   laps2, teamColor2, driverLabel, driverLabel2,
-  raceControl,
+  raceControl, pits, pits2,
 }: Props) {
   const isComparing = laps2 && laps2.length > 0
 
@@ -345,14 +347,53 @@ export function SectorTimesPanel({
                         ) : null,
                       ]
                     })}
+                    {/* Pit stop markers — driver 1 */}
+                    {pits?.map((pit, i) => (
+                      <ReferenceLine
+                        key={`pit1-${pit.lap_number}-${i}`}
+                        x={pit.lap_number}
+                        stroke={teamColor}
+                        strokeDasharray="2 2"
+                        strokeWidth={1}
+                        strokeOpacity={0.5}
+                        label={{
+                          value: "PIT",
+                          position: "top",
+                          fontSize: 7,
+                          fill: teamColor,
+                        }}
+                      />
+                    ))}
+                    {/* Pit stop markers — driver 2 */}
+                    {isComparing && pits2?.map((pit, i) => (
+                      <ReferenceLine
+                        key={`pit2-${pit.lap_number}-${i}`}
+                        x={pit.lap_number}
+                        stroke={teamColor2}
+                        strokeDasharray="2 2"
+                        strokeWidth={1}
+                        strokeOpacity={0.5}
+                        label={{
+                          value: "PIT",
+                          position: "bottom",
+                          fontSize: 7,
+                          fill: teamColor2,
+                        }}
+                      />
+                    ))}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             )}
 
             {/* Race event legend */}
-            {raceEvents.length > 0 && (
+            {(raceEvents.length > 0 || (pits && pits.length > 0)) && (
               <div className="flex flex-wrap gap-3 text-[9px] text-muted-foreground">
+                {(pits && pits.length > 0) && (
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full border border-white/50 bg-transparent" /> Pit Stop
+                  </span>
+                )}
                 {raceEvents.some((e) => e.type === "safety_car") && (
                   <span className="flex items-center gap-1">
                     <span className="inline-block h-2 w-2 rounded-full bg-amber-500" /> Safety Car
@@ -474,16 +515,23 @@ export function SectorTimesPanel({
                       }
                     }
 
+                    const pitLaps1 = new Set(pits?.map((p) => p.lap_number) ?? [])
+                    const pitLaps2 = new Set(pits2?.map((p) => p.lap_number) ?? [])
+
                     return sorted.map((lapNum) => {
                       const lap1 = d1Map.get(lapNum)
                       const lap2 = d2Map.get(lapNum)
                       const evtType = eventLaps.get(lapNum)
+                      const isPit1 = pitLaps1.has(lapNum)
+                      const isPit2 = pitLaps2.has(lapNum)
 
                       return (
                         <tr key={lapNum} className={`border-b border-border/10 ${evtType ? "bg-amber-500/5" : ""}`}>
                           <td className="px-1 py-0.5 text-muted-foreground">
                             <span className="flex items-center gap-1">
                               {lapNum}
+                              {isPit1 && <span style={{ color: teamColor }} title={`${driverLabel ?? "D1"} pit stop`}>P</span>}
+                              {isPit2 && <span style={{ color: teamColor2 }} title={`${driverLabel2 ?? "D2"} pit stop`}>P</span>}
                               {evtType === "safety_car" && <span className="text-amber-500" title="Safety Car">&#9873;</span>}
                               {evtType === "vsc" && <span className="text-amber-500/70" title="Virtual Safety Car">&#9873;</span>}
                               {evtType === "red_flag" && <span className="text-red-500" title="Red Flag">&#9873;</span>}

@@ -317,6 +317,8 @@ export function TelemetryDashboard({ races, drivers, raceResults }: Props) {
               driverLabel={isComparing ? driverLabel : undefined}
               driverLabel2={isComparing ? driverLabel2 : undefined}
               raceControl={raceControl}
+              pits={pits}
+              pits2={isComparing ? pits2 : undefined}
             />
             <PositionPanel
               positions={positions}
