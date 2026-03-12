@@ -1,16 +1,17 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DriverBadge, TEAM_META } from "@/components/driver-badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useTelemetrySessions, useLaps, useStints, usePositions, useCarStats } from "@/hooks/use-telemetry"
+import { useTelemetrySessions, useLaps, useStints, usePositions, useCarStats, useRaceControl, useEnergy } from "@/hooks/use-telemetry"
 import { SectorTimesPanel } from "@/components/telemetry/sector-times-panel"
 import { TireStrategyPanel } from "@/components/telemetry/tire-strategy-panel"
 import { PositionPanel } from "@/components/telemetry/position-panel"
 import { CarStatsReadout } from "@/components/telemetry/car-stats-readout"
 import { SpeedTrapPanel } from "@/components/telemetry/speed-trap-panel"
+import { EnergyPanel } from "@/components/telemetry/energy-panel"
 import { Radio, Gauge } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -34,12 +35,18 @@ interface Driver {
   team_id: string
 }
 
+interface RaceResult {
+  driver_id: string
+  position: number
+}
+
 interface Props {
   races: Race[]
   drivers: Driver[]
+  raceResults?: RaceResult[]
 }
 
-export function TelemetryDashboard({ races, drivers }: Props) {
+export function TelemetryDashboard({ races, drivers, raceResults }: Props) {
   const { sessions, isLoading: sessionsLoading } = useTelemetrySessions()
 
   // Only show completed races (past race_date)
@@ -55,8 +62,30 @@ export function TelemetryDashboard({ races, drivers }: Props) {
     completedRaces[0]?.round ?? null
   )
 
-  const [selectedDriverNumber, setSelectedDriverNumber] = useState<number | null>(null)
-  const [selectedDriverNumber2, setSelectedDriverNumber2] = useState<number | null>(null)
+  // Determine default drivers from race results (P1 and P2)
+  const defaultDriverNumbers = useMemo(() => {
+    if (!raceResults || raceResults.length === 0) return { p1: null as number | null, p2: null as number | null }
+    const sorted = [...raceResults].sort((a, b) => a.position - b.position)
+    const p1Result = sorted[0]
+    const p2Result = sorted[1]
+    const p1Driver = p1Result ? drivers.find((d) => d.id === p1Result.driver_id) : null
+    const p2Driver = p2Result ? drivers.find((d) => d.id === p2Result.driver_id) : null
+    return { p1: p1Driver?.number ?? null, p2: p2Driver?.number ?? null }
+  }, [raceResults, drivers])
+
+  const [selectedDriverNumber, setSelectedDriverNumber] = useState<number | null>(defaultDriverNumbers.p1)
+  const [selectedDriverNumber2, setSelectedDriverNumber2] = useState<number | null>(defaultDriverNumbers.p2)
+
+  // When race results load after initial render, set defaults if user hasn't picked yet
+  const [hasUserSelectedDriver, setHasUserSelectedDriver] = useState(false)
+  useEffect(() => {
+    if (!hasUserSelectedDriver && defaultDriverNumbers.p1 !== null && selectedDriverNumber === null) {
+      setSelectedDriverNumber(defaultDriverNumbers.p1)
+      if (defaultDriverNumbers.p2 !== null) {
+        setSelectedDriverNumber2(defaultDriverNumbers.p2)
+      }
+    }
+  }, [defaultDriverNumbers, hasUserSelectedDriver, selectedDriverNumber])
 
   const selectedRace = completedRaces.find((r) => r.round === selectedRound) ?? null
 
@@ -64,12 +93,12 @@ export function TelemetryDashboard({ races, drivers }: Props) {
   const sessionKey = useMemo(() => {
     if (!selectedRace || sessions.length === 0) return null
     const raceCountry = selectedRace.country.toLowerCase().trim()
-    
+
     // Try exact match first
     let match = sessions.find(
       (s) => s.country_name.toLowerCase().trim() === raceCountry
     )
-    
+
     // Try partial match (e.g. "Australia" matches "Australian")
     if (!match) {
       match = sessions.find(
@@ -77,7 +106,7 @@ export function TelemetryDashboard({ races, drivers }: Props) {
                raceCountry.includes(s.country_name.toLowerCase())
       )
     }
-    
+
     // Try matching by circuit/location name
     const raceCity = selectedRace.city?.toLowerCase().trim()
     if (!match && raceCity) {
@@ -86,7 +115,7 @@ export function TelemetryDashboard({ races, drivers }: Props) {
                s.circuit_short_name?.toLowerCase().includes(raceCity)
       )
     }
-    
+
     return match?.session_key ?? null
   }, [selectedRace, sessions])
 
@@ -116,12 +145,17 @@ export function TelemetryDashboard({ races, drivers }: Props) {
   const { stints, isLoading: stintsLoading, error: stintsError } = useStints(sessionKey, selectedDriverNumber)
   const { positions, intervals, isLoading: positionsLoading, error: positionsError } = usePositions(sessionKey, selectedDriverNumber)
   const { stats, isLoading: statsLoading, error: statsError } = useCarStats(sessionKey, selectedDriverNumber)
+  const { energy, isLoading: energyLoading, error: energyError } = useEnergy(sessionKey, selectedDriverNumber)
 
   // --- SWR hooks for Driver 2 ---
   const { laps: laps2 } = useLaps(sessionKey, selectedDriverNumber2)
   const { stints: stints2 } = useStints(sessionKey, selectedDriverNumber2)
   const { positions: positions2, intervals: intervals2 } = usePositions(sessionKey, selectedDriverNumber2)
   const { stats: stats2 } = useCarStats(sessionKey, selectedDriverNumber2)
+  const { energy: energy2 } = useEnergy(sessionKey, selectedDriverNumber2)
+
+  // --- Race control data (shared across widgets) ---
+  const { raceControl } = useRaceControl(sessionKey)
 
   // Pit stops computed from stints
   const pitStops = stints.length > 0 ? stints.length - 1 : 0
@@ -140,6 +174,7 @@ export function TelemetryDashboard({ races, drivers }: Props) {
             setSelectedRound(Number(v))
             setSelectedDriverNumber(null)
             setSelectedDriverNumber2(null)
+            setHasUserSelectedDriver(false)
           }}
         >
           <SelectTrigger className="w-full sm:w-[240px] border-border/50 bg-secondary/30">
@@ -159,7 +194,8 @@ export function TelemetryDashboard({ races, drivers }: Props) {
           value={selectedDriverNumber?.toString() ?? ""}
           onValueChange={(v) => {
             setSelectedDriverNumber(Number(v))
-            setSelectedDriverNumber2(null) // reset driver 2 when driver 1 changes
+            setSelectedDriverNumber2(null)
+            setHasUserSelectedDriver(true)
           }}
           disabled={!selectedRound}
         >
@@ -255,7 +291,19 @@ export function TelemetryDashboard({ races, drivers }: Props) {
             driverLabel2={isComparing ? driverLabel2 : undefined}
           />
 
-          {/* Main panels grid */}
+          {/* Tire Strategy — full width */}
+          <TireStrategyPanel
+            stints={stints}
+            isLoading={stintsLoading}
+            error={stintsError}
+            teamColor={teamColor}
+            stints2={isComparing ? stints2 : undefined}
+            teamColor2={isComparing ? teamColor2 : undefined}
+            driverLabel={isComparing ? driverLabel : undefined}
+            driverLabel2={isComparing ? driverLabel2 : undefined}
+          />
+
+          {/* Sector Times + Position grid */}
           <div className="grid gap-4 lg:grid-cols-2">
             <SectorTimesPanel
               laps={laps}
@@ -266,6 +314,7 @@ export function TelemetryDashboard({ races, drivers }: Props) {
               teamColor2={isComparing ? teamColor2 : undefined}
               driverLabel={isComparing ? driverLabel : undefined}
               driverLabel2={isComparing ? driverLabel2 : undefined}
+              raceControl={raceControl}
             />
             <PositionPanel
               positions={positions}
@@ -283,6 +332,18 @@ export function TelemetryDashboard({ races, drivers }: Props) {
             />
           </div>
 
+          {/* Battery & Energy — full width */}
+          <EnergyPanel
+            energy={energy}
+            isLoading={energyLoading}
+            error={energyError}
+            teamColor={teamColor}
+            energy2={isComparing ? energy2 : undefined}
+            teamColor2={isComparing ? teamColor2 : undefined}
+            driverLabel={isComparing ? driverLabel : undefined}
+            driverLabel2={isComparing ? driverLabel2 : undefined}
+          />
+
           {/* Speed Trap Panel — full width */}
           <SpeedTrapPanel
             laps={laps}
@@ -290,18 +351,6 @@ export function TelemetryDashboard({ races, drivers }: Props) {
             error={lapsError}
             teamColor={teamColor}
             laps2={isComparing ? laps2 : undefined}
-            teamColor2={isComparing ? teamColor2 : undefined}
-            driverLabel={isComparing ? driverLabel : undefined}
-            driverLabel2={isComparing ? driverLabel2 : undefined}
-          />
-
-          {/* Tire Strategy — full width */}
-          <TireStrategyPanel
-            stints={stints}
-            isLoading={stintsLoading}
-            error={stintsError}
-            teamColor={teamColor}
-            stints2={isComparing ? stints2 : undefined}
             teamColor2={isComparing ? teamColor2 : undefined}
             driverLabel={isComparing ? driverLabel : undefined}
             driverLabel2={isComparing ? driverLabel2 : undefined}

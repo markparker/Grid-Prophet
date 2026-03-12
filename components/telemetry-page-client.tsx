@@ -30,11 +30,17 @@ interface Driver {
   team_id: string
 }
 
+interface RaceResult {
+  driver_id: string
+  position: number
+}
+
 interface Props {
   races: Race[]
   drivers: Driver[]
+  raceResults?: RaceResult[]
 }
 
-export function TelemetryPageClient({ races, drivers }: Props) {
-  return <TelemetryDashboard races={races} drivers={drivers} />
+export function TelemetryPageClient({ races, drivers, raceResults }: Props) {
+  return <TelemetryDashboard races={races} drivers={drivers} raceResults={raceResults} />
 }

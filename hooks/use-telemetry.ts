@@ -1,7 +1,7 @@
 "use client"
 
 import useSWR from "swr"
-import type { OpenF1Lap, OpenF1Stint, OpenF1Position, OpenF1Interval, CarStatsSummary } from "@/lib/openf1"
+import type { OpenF1Lap, OpenF1Stint, OpenF1Position, OpenF1Interval, OpenF1RaceControl, CarStatsSummary } from "@/lib/openf1"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -84,6 +84,22 @@ export function usePositions(sessionKey: number | null, driverNumber: number | n
   }
 }
 
+export function useRaceControl(sessionKey: number | null) {
+  const { data, error, isLoading } = useSWR<{ messages: OpenF1RaceControl[] }>(
+    sessionKey
+      ? `/api/telemetry/race-control?session_key=${sessionKey}`
+      : null,
+    fetcher,
+    SWR_OPTIONS
+  )
+
+  return {
+    raceControl: data?.messages ?? [],
+    isLoading,
+    error,
+  }
+}
+
 export function useCarStats(sessionKey: number | null, driverNumber: number | null) {
   const shouldFetch = sessionKey && driverNumber
   const { data, error, isLoading } = useSWR<{ stats: CarStatsSummary | null }>(
@@ -96,6 +112,33 @@ export function useCarStats(sessionKey: number | null, driverNumber: number | nu
 
   return {
     stats: data?.stats ?? null,
+    isLoading,
+    error,
+  }
+}
+
+export interface LapEnergy {
+  lap: number
+  deployPct: number
+  harvestPct: number
+  avgThrottle: number
+  avgBrake: number
+  avgSpeed: number
+  drsActivations: number
+}
+
+export function useEnergy(sessionKey: number | null, driverNumber: number | null) {
+  const shouldFetch = sessionKey && driverNumber
+  const { data, error, isLoading } = useSWR<{ energy: LapEnergy[] }>(
+    shouldFetch
+      ? `/api/telemetry/energy?session_key=${sessionKey}&driver_number=${driverNumber}`
+      : null,
+    fetcher,
+    SWR_OPTIONS
+  )
+
+  return {
+    energy: data?.energy ?? [],
     isLoading,
     error,
   }

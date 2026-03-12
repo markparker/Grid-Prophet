@@ -82,6 +82,18 @@ export interface OpenF1Driver {
   session_key: number
 }
 
+export interface OpenF1RaceControl {
+  category: string
+  date: string
+  driver_number: number | null
+  flag: string | null
+  lap_number: number | null
+  message: string
+  scope: string | null
+  sector: number | null
+  session_key: number
+}
+
 // --- Summary types (server-aggregated) ---
 
 export interface CarStatsSummary {
@@ -177,6 +189,14 @@ export async function fetchDrivers(
   sessionKey: number
 ): Promise<OpenF1Driver[] | null> {
   return fetchOpenF1<OpenF1Driver>("/drivers", {
+    session_key: sessionKey,
+  })
+}
+
+export async function fetchRaceControl(
+  sessionKey: number
+): Promise<OpenF1RaceControl[] | null> {
+  return fetchOpenF1<OpenF1RaceControl>("/race_control", {
     session_key: sessionKey,
   })
 }

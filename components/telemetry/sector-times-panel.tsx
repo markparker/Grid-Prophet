@@ -17,7 +17,13 @@ import {
   Legend,
 } from "recharts"
 import { Timer, AlertCircle } from "lucide-react"
-import type { OpenF1Lap } from "@/lib/openf1"
+import type { OpenF1Lap, OpenF1RaceControl } from "@/lib/openf1"
+
+interface RaceEvent {
+  lap: number
+  type: "safety_car" | "vsc" | "red_flag" | "incident"
+  message: string
+}
 
 interface Props {
   laps: OpenF1Lap[]
@@ -28,6 +34,7 @@ interface Props {
   teamColor2?: string
   driverLabel?: string
   driverLabel2?: string
+  raceControl?: OpenF1RaceControl[]
 }
 
 function formatTime(seconds: number | null): string {
@@ -58,14 +65,56 @@ function processLaps(laps: OpenF1Lap[]) {
   return { raceLaps, bestS1, bestS2, bestS3, bestLap }
 }
 
+function extractRaceEvents(raceControl: OpenF1RaceControl[]): RaceEvent[] {
+  const events: RaceEvent[] = []
+  const seen = new Set<string>()
+
+  for (const rc of raceControl) {
+    if (!rc.lap_number) continue
+    const msg = rc.message.toUpperCase()
+    const cat = rc.category.toUpperCase()
+
+    let type: RaceEvent["type"] | null = null
+    if (cat === "SAFETYCAR" || msg.includes("SAFETY CAR DEPLOYED") || msg.includes("SAFETY CAR")) {
+      type = "safety_car"
+    } else if (msg.includes("VIRTUAL SAFETY CAR") || msg.includes("VSC")) {
+      type = "vsc"
+    } else if (rc.flag === "RED" || msg.includes("RED FLAG")) {
+      type = "red_flag"
+    } else if (
+      cat === "FLAG" &&
+      (rc.flag === "YELLOW" || rc.flag === "DOUBLE YELLOW") &&
+      rc.scope === "Track"
+    ) {
+      type = "incident"
+    }
+
+    if (type) {
+      const key = `${rc.lap_number}-${type}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        events.push({ lap: rc.lap_number, type, message: rc.message })
+      }
+    }
+  }
+
+  return events
+}
+
 export function SectorTimesPanel({
   laps, isLoading, error, teamColor,
   laps2, teamColor2, driverLabel, driverLabel2,
+  raceControl,
 }: Props) {
   const isComparing = laps2 && laps2.length > 0
 
   const d1 = useMemo(() => processLaps(laps), [laps])
   const d2 = useMemo(() => (isComparing ? processLaps(laps2) : null), [laps2, isComparing])
+
+  const raceEvents = useMemo(
+    () => (raceControl ? extractRaceEvents(raceControl) : []),
+    [raceControl]
+  )
 
   // Merged chart data for lap time comparison
   const { chartData, deltaData } = useMemo(() => {
@@ -209,8 +258,58 @@ export function SectorTimesPanel({
                         style={{ filter: `drop-shadow(0 0 4px ${teamColor2}40)` }}
                       />
                     )}
+                    {/* Safety car / incident markers */}
+                    {raceEvents.map((evt, i) => (
+                      <ReferenceLine
+                        key={`${evt.lap}-${evt.type}-${i}`}
+                        x={evt.lap}
+                        stroke={
+                          evt.type === "red_flag" ? "#ef4444" :
+                          evt.type === "safety_car" ? "#f59e0b" :
+                          evt.type === "vsc" ? "#f59e0b" :
+                          "#eab308"
+                        }
+                        strokeDasharray={evt.type === "vsc" ? "4 2" : undefined}
+                        strokeWidth={1}
+                        strokeOpacity={0.7}
+                        label={{
+                          value: evt.type === "safety_car" ? "SC" :
+                                 evt.type === "vsc" ? "VSC" :
+                                 evt.type === "red_flag" ? "RED" : "!",
+                          position: "top",
+                          fontSize: 8,
+                          fill: evt.type === "red_flag" ? "#ef4444" : "#f59e0b",
+                        }}
+                      />
+                    ))}
                   </LineChart>
                 </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Race event legend */}
+            {raceEvents.length > 0 && (
+              <div className="flex flex-wrap gap-3 text-[9px] text-muted-foreground">
+                {raceEvents.some((e) => e.type === "safety_car") && (
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-amber-500" /> Safety Car
+                  </span>
+                )}
+                {raceEvents.some((e) => e.type === "vsc") && (
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full border border-amber-500 bg-transparent" /> VSC
+                  </span>
+                )}
+                {raceEvents.some((e) => e.type === "red_flag") && (
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-red-500" /> Red Flag
+                  </span>
+                )}
+                {raceEvents.some((e) => e.type === "incident") && (
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-yellow-500" /> Incident
+                  </span>
+                )}
               </div>
             )}
 
@@ -304,13 +403,29 @@ export function SectorTimesPanel({
                     const d1Map = new Map<number, OpenF1Lap>()
                     for (const l of d1.raceLaps) d1Map.set(l.lap_number, l)
 
+                    const eventLaps = new Map<number, RaceEvent["type"]>()
+                    for (const evt of raceEvents) {
+                      if (!eventLaps.has(evt.lap) || evt.type === "red_flag" || evt.type === "safety_car") {
+                        eventLaps.set(evt.lap, evt.type)
+                      }
+                    }
+
                     return sorted.map((lapNum) => {
                       const lap1 = d1Map.get(lapNum)
                       const lap2 = d2Map.get(lapNum)
+                      const evtType = eventLaps.get(lapNum)
 
                       return (
-                        <tr key={lapNum} className="border-b border-border/10">
-                          <td className="px-1 py-0.5 text-muted-foreground">{lapNum}</td>
+                        <tr key={lapNum} className={`border-b border-border/10 ${evtType ? "bg-amber-500/5" : ""}`}>
+                          <td className="px-1 py-0.5 text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              {lapNum}
+                              {evtType === "safety_car" && <span className="text-amber-500" title="Safety Car">&#9873;</span>}
+                              {evtType === "vsc" && <span className="text-amber-500/70" title="Virtual Safety Car">&#9873;</span>}
+                              {evtType === "red_flag" && <span className="text-red-500" title="Red Flag">&#9873;</span>}
+                              {evtType === "incident" && <span className="text-yellow-500" title="Incident">!</span>}
+                            </span>
+                          </td>
                           <td className={`px-1 py-0.5 text-right ${lap1 ? sectorClass(lap1.duration_sector_1, d1.bestS1) : "text-muted-foreground/30"}`}>
                             {lap1 ? formatTime(lap1.duration_sector_1) : "—"}
                           </td>
