@@ -19,12 +19,21 @@ export async function POST() {
     .order("round", { ascending: true })
 
   if (!pendingRaces || pendingRaces.length === 0) {
-    return NextResponse.json({ message: "No pending races to sync", synced: 0 })
+    return NextResponse.json({ 
+      message: "No pending races to sync", 
+      synced: 0,
+      checked: [],
+      today
+    })
   }
 
   let synced = 0
+  const checked: Array<{ round: number; name: string; qualyFetched: boolean; resultsFetched: boolean; apiHasResults: boolean }> = []
 
   for (const race of pendingRaces) {
+    let qualyFetchedThisRun = false
+    let apiHasResults = false
+
     // Fetch qualifying results
     if (!race.qualifying_fetched) {
       const qualyResults = await fetchQualifyingResults(2026, race.round)
@@ -50,12 +59,15 @@ export async function POST() {
           .from("races")
           .update({ qualifying_fetched: true })
           .eq("id", race.id)
+        qualyFetchedThisRun = true
       }
     }
 
     // Fetch race results
     const raceResults = await fetchRaceResults(2026, race.round)
-    if (raceResults && raceResults.length > 0) {
+    apiHasResults = raceResults && raceResults.length > 0
+
+    if (apiHasResults) {
       const { data: drivers } = await supabase.from("drivers").select("id, short_name, surname")
       const driverMap = createDriverMap(drivers || [])
 
@@ -83,9 +95,21 @@ export async function POST() {
       await scoreAllPredictions(supabase, race.id)
       synced++
     }
+
+    checked.push({
+      round: race.round,
+      name: race.race_name,
+      qualyFetched: race.qualifying_fetched || qualyFetchedThisRun,
+      resultsFetched: apiHasResults,
+      apiHasResults
+    })
   }
 
-  return NextResponse.json({ message: `Synced ${synced} race(s)`, synced })
+  const message = synced > 0 
+    ? `Synced ${synced} race(s)` 
+    : `Checked ${checked.length} race(s) but F1 API has no results yet. Results typically appear 1-2 hours after race ends.`
+
+  return NextResponse.json({ message, synced, checked, today })
 }
 
 function createDriverMap(
