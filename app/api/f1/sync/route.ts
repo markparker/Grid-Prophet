@@ -65,7 +65,7 @@ export async function POST() {
 
     // Fetch race results
     const raceResults = await fetchRaceResults(2026, race.round)
-    apiHasResults = raceResults && raceResults.length > 0
+    apiHasResults = !!(raceResults && raceResults.length > 0)
 
     if (apiHasResults) {
       const { data: drivers } = await supabase.from("drivers").select("id, short_name, surname")
