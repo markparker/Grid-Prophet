@@ -67,7 +67,7 @@ export async function POST() {
     const raceResults = await fetchRaceResults(2026, race.round)
     apiHasResults = !!(raceResults && raceResults.length > 0)
 
-    if (apiHasResults) {
+    if (apiHasResults && raceResults) {
       const { data: drivers } = await supabase.from("drivers").select("id, short_name, surname")
       const driverMap = createDriverMap(drivers || [])
 
