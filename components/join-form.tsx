@@ -58,9 +58,10 @@ export function JoinForm() {
     const form = new FormData(e.currentTarget)
     const inviteCode = (form.get("inviteCode") as string).trim()
     const playerName = (form.get("playerName") as string).trim()
-    const joinEmail = (form.get("joinEmail") as string).trim()
+    const joinEmail = (form.get("joinEmail") as string)?.trim() || ""
+    const emailToUse = googleEmail || joinEmail
 
-    if (!inviteCode || !playerName || !joinEmail) {
+    if (!inviteCode || !playerName || !emailToUse) {
       toast.error("Please fill in all fields")
       setLoading(false)
       return
@@ -74,7 +75,7 @@ export function JoinForm() {
           action: "join",
           inviteCode,
           playerName,
-          email: googleEmail || joinEmail,
+          email: emailToUse,
           googleId: googleId || undefined,
           avatarUrl: googleAvatarUrl || undefined,
         }),
