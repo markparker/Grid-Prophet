@@ -8,6 +8,7 @@ export interface PlayerSession {
   avatarUrl?: string
   email?: string
   googleLinked?: boolean
+  isAdmin?: boolean
 }
 
 const SESSION_COOKIE = "f1_league_session"
