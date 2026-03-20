@@ -39,11 +39,6 @@ export default async function RacesPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {(races || []).map((race) => {
-          // Skip canceled races entirely
-          if (race.status === "canceled") {
-            return null
-          }
-
           const raceDate = new Date(race.race_date)
           const qualyDate = race.qualifying_date
             ? new Date(race.qualifying_date)
@@ -52,8 +47,10 @@ export default async function RacesPage() {
           const isLocked = qualyDate < now
           const hasPrediction = predictedRaceIds.has(race.id)
 
-          let status: "upcoming" | "locked" | "completed" | "results"
-          if (race.results_fetched) {
+          let status: "upcoming" | "locked" | "completed" | "results" | "canceled"
+          if (race.status === "canceled") {
+            status = "canceled"
+          } else if (race.results_fetched) {
             status = "results"
           } else if (isPast) {
             status = "completed"
