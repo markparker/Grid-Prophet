@@ -30,6 +30,32 @@ export default async function RaceDetailPage({
 
   if (!race) notFound()
 
+  // Redirect if race is canceled
+  if (race.status === "canceled") {
+    return (
+      <div className="flex flex-col gap-6">
+        <Link
+          href="/races"
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          All Races
+        </Link>
+        <Card>
+          <CardContent className="flex flex-col items-center gap-4 py-12">
+            <Badge className="bg-red-500/10 text-red-500 border-red-500/20">
+              RACE CANCELED
+            </Badge>
+            <h2 className="text-lg font-semibold">{race.race_name}</h2>
+            <p className="text-sm text-muted-foreground text-center max-w-sm">
+              This race has been canceled. No predictions are being accepted.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   // Get all drivers
   const { data: drivers } = await supabase
     .from("drivers")
