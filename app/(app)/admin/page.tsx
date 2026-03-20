@@ -117,9 +117,9 @@ export default async function AdminPage() {
                       <td className="py-3 px-4">{user.name}</td>
                       <td className="py-3 px-4 text-muted-foreground">{user.email || "—"}</td>
                       <td className="py-3 px-4">
-                        {user.groups ? (
+                        {user.groups && user.groups[0] ? (
                           <code className="text-xs bg-muted px-2 py-1 rounded">
-                            {user.groups.name}
+                            {user.groups[0].name}
                           </code>
                         ) : (
                           <span className="text-muted-foreground">—</span>
