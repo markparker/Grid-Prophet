@@ -1,8 +1,16 @@
-import { updateSession } from '@/lib/supabase/proxy'
-import { type NextRequest } from 'next/server'
+import { type NextRequest, NextResponse } from 'next/server'
 
+/**
+ * Proxy function for Next.js 16
+ * Handles session validation and routing for the Grid Prophet app.
+ * Uses custom session management (not Supabase Auth).
+ */
 export async function proxy(request: NextRequest) {
-  return await updateSession(request)
+  // Pass through all requests - session is managed via cookies
+  // and validated in API routes using getSession()
+  return NextResponse.next({
+    request,
+  })
 }
 
 export const config = {
@@ -13,7 +21,6 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - images - .svg, .png, .jpg, .jpeg, .gif, .webp
-     * Feel free to modify this pattern to include more paths.
      */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
