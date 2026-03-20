@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ArrowLeft, Users, UserCheck, Clock } from "lucide-react"
-import { useState } from "react"
 
 export default async function AdminPage() {
   const session = await getSession()
