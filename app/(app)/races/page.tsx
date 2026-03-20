@@ -39,6 +39,11 @@ export default async function RacesPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {(races || []).map((race) => {
+          // Skip canceled races entirely
+          if (race.status === "canceled") {
+            return null
+          }
+
           const raceDate = new Date(race.race_date)
           const qualyDate = race.qualifying_date
             ? new Date(race.qualifying_date)
