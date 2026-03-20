@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
-import { CheckCircle2, Lock, Circle, Trophy } from "lucide-react"
+import { CheckCircle2, Lock, Circle, Trophy, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface RaceCardProps {
@@ -13,7 +13,7 @@ interface RaceCardProps {
     race_date: string
     is_sprint: boolean
   }
-  status: "upcoming" | "locked" | "completed" | "results"
+  status: "upcoming" | "locked" | "completed" | "results" | "canceled"
   hasPrediction: boolean
 }
 
@@ -42,26 +42,39 @@ const statusConfig = {
     bg: "bg-primary/10",
     icon: Trophy,
   },
+  canceled: {
+    label: "Canceled",
+    color: "text-red-500",
+    bg: "bg-red-500/10",
+    icon: X,
+  },
 }
 
 export function RaceCard({ race, status, hasPrediction }: RaceCardProps) {
   const config = statusConfig[status]
   const Icon = config.icon
   const raceDate = new Date(race.race_date)
+  const isDisabled = status === "canceled"
 
   return (
-    <Link href={`/races/${race.round}`}>
-      <Card className="group transition-colors hover:border-primary/30 hover:bg-card/80">
+    <Link href={isDisabled ? "#" : `/races/${race.round}`} className={isDisabled ? "cursor-not-allowed" : ""}>
+      <Card className={cn(
+        "group transition-colors",
+        isDisabled ? "opacity-60" : "hover:border-primary/30 hover:bg-card/80"
+      )}>
         <CardContent className="flex items-start gap-3 p-4">
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-secondary font-mono text-sm font-bold text-muted-foreground">
             R{String(race.round).padStart(2, "0")}
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex items-start justify-between gap-2">
-              <h3 className="truncate text-sm font-semibold group-hover:text-primary transition-colors">
+              <h3 className={cn(
+                "truncate text-sm font-semibold transition-colors",
+                isDisabled ? "text-muted-foreground" : "group-hover:text-primary"
+              )}>
                 {race.race_name}
               </h3>
-              {race.is_sprint && (
+              {race.is_sprint && !isDisabled && (
                 <span className="flex-shrink-0 rounded bg-f1-yellow/10 px-1.5 py-0.5 text-[10px] font-medium text-f1-yellow">
                   SPRINT
                 </span>
@@ -78,7 +91,7 @@ export function RaceCard({ race, status, hasPrediction }: RaceCardProps) {
                 })}
               </span>
               <div className="flex items-center gap-1.5">
-                {hasPrediction && (
+                {hasPrediction && !isDisabled && (
                   <CheckCircle2 className="h-3.5 w-3.5 text-f1-green" />
                 )}
                 <span
