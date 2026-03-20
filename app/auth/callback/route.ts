@@ -98,6 +98,12 @@ export async function GET(request: Request) {
 
           const isFirstGoogleSignIn = !player.google_id
 
+          // Update last_login timestamp
+          await supabase
+            .from("players")
+            .update({ last_login: new Date().toISOString() })
+            .eq("id", player.id)
+
           await setSession({
             playerId: player.id,
             groupId: player.group_id,
@@ -106,6 +112,7 @@ export async function GET(request: Request) {
             avatarUrl: avatarUrl,
             email: player.email || email,
             googleLinked: true,
+            isAdmin: player.is_admin || false,
           })
 
           // Only send welcome email the very first time they connect Google
