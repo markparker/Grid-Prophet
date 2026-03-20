@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils"
 import { useState } from "react"
 import { LeagueSwitcher } from "@/components/league-switcher"
 
+import { Shield } from "lucide-react"
+
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/races", label: "Races", icon: Flag },
@@ -31,10 +33,12 @@ export function Nav({
   playerName,
   groupName,
   avatarUrl,
+  isAdmin,
 }: {
   playerName: string
   groupName: string
   avatarUrl?: string
+  isAdmin?: boolean
 }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -82,6 +86,20 @@ export function Nav({
               </Link>
             )
           })}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                pathname === "/admin" || pathname.startsWith("/admin/")
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              )}
+            >
+              <Shield className="h-4 w-4" />
+              Admin
+            </Link>
+          )}
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
@@ -174,6 +192,21 @@ export function Nav({
                 </Link>
               )
             })}
+            {isAdmin && (
+              <Link
+                href="/admin"
+                onClick={() => setMobileOpen(false)}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  pathname === "/admin" || pathname.startsWith("/admin/")
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                )}
+              >
+                <Shield className="h-4 w-4" />
+                Admin
+              </Link>
+            )}
             <Link
               href="/profile"
               onClick={() => setMobileOpen(false)}
