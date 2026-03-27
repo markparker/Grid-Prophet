@@ -21,12 +21,13 @@ export interface ScoreBreakdown {
   }>
 }
 
-export function scoreRacePrediction(
+function scorePositions(
   predictions: PositionPrediction[],
-  actualResults: ActualResult[]
+  actuals: ActualResult[],
+  excludeOutsideTop10 = false
 ): ScoreBreakdown {
   const resultMap = new Map<string, number>()
-  actualResults.forEach((r) => resultMap.set(r.driver_id, r.position))
+  actuals.forEach((r) => resultMap.set(r.driver_id, r.position))
 
   let exact = 0
   let close = 0
@@ -35,7 +36,7 @@ export function scoreRacePrediction(
 
   for (const pred of predictions) {
     const actual = resultMap.get(pred.driver_id)
-    if (actual === undefined || actual > 10) {
+    if (actual === undefined || (excludeOutsideTop10 && actual > 10)) {
       details.push({
         driver_id: pred.driver_id,
         predicted: pred.predicted_position,
@@ -50,35 +51,24 @@ export function scoreRacePrediction(
     if (diff === 0) {
       exact++
       total += 3
-      details.push({
-        driver_id: pred.driver_id,
-        predicted: pred.predicted_position,
-        actual,
-        points: 3,
-        type: "exact",
-      })
+      details.push({ driver_id: pred.driver_id, predicted: pred.predicted_position, actual, points: 3, type: "exact" })
     } else if (diff === 1) {
       close++
       total += 1
-      details.push({
-        driver_id: pred.driver_id,
-        predicted: pred.predicted_position,
-        actual,
-        points: 1,
-        type: "close",
-      })
+      details.push({ driver_id: pred.driver_id, predicted: pred.predicted_position, actual, points: 1, type: "close" })
     } else {
-      details.push({
-        driver_id: pred.driver_id,
-        predicted: pred.predicted_position,
-        actual,
-        points: 0,
-        type: "miss",
-      })
+      details.push({ driver_id: pred.driver_id, predicted: pred.predicted_position, actual, points: 0, type: "miss" })
     }
   }
 
   return { exact, close, total, details }
+}
+
+export function scoreRacePrediction(
+  predictions: PositionPrediction[],
+  actualResults: ActualResult[]
+): ScoreBreakdown {
+  return scorePositions(predictions, actualResults, true)
 }
 
 export function scorePolePrediction(
@@ -93,58 +83,5 @@ export function scoreWdcPrediction(
   predictions: PositionPrediction[],
   actualStandings: ActualResult[]
 ): ScoreBreakdown {
-  const standingsMap = new Map<string, number>()
-  actualStandings.forEach((s) => standingsMap.set(s.driver_id, s.position))
-
-  let exact = 0
-  let close = 0
-  let total = 0
-  const details: ScoreBreakdown["details"] = []
-
-  for (const pred of predictions) {
-    const actual = standingsMap.get(pred.driver_id)
-    if (actual === undefined) {
-      details.push({
-        driver_id: pred.driver_id,
-        predicted: pred.predicted_position,
-        actual: null,
-        points: 0,
-        type: "not_in_top_10",
-      })
-      continue
-    }
-
-    const diff = Math.abs(pred.predicted_position - actual)
-    if (diff === 0) {
-      exact++
-      total += 3
-      details.push({
-        driver_id: pred.driver_id,
-        predicted: pred.predicted_position,
-        actual,
-        points: 3,
-        type: "exact",
-      })
-    } else if (diff === 1) {
-      close++
-      total += 1
-      details.push({
-        driver_id: pred.driver_id,
-        predicted: pred.predicted_position,
-        actual,
-        points: 1,
-        type: "close",
-      })
-    } else {
-      details.push({
-        driver_id: pred.driver_id,
-        predicted: pred.predicted_position,
-        actual,
-        points: 0,
-        type: "miss",
-      })
-    }
-  }
-
-  return { exact, close, total, details }
+  return scorePositions(predictions, actualStandings, false)
 }
