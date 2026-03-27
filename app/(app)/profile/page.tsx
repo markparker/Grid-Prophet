@@ -74,7 +74,7 @@ interface ProfileInfoCardProps {
   avatarPreview: string
   avatarUrl: string
   saving: boolean
-  fileInputRef: React.RefObject<HTMLInputElement>
+  fileInputRef: React.RefObject<HTMLInputElement | null>
   onDisplayNameChange: (name: string) => void
   onAvatarUrlChange: (url: string) => void
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
