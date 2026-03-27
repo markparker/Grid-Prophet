@@ -1,5 +1,6 @@
 "use client"
 
+// Profile page v2 - simplified inline implementation
 import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
