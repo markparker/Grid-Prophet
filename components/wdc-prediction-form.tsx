@@ -212,7 +212,9 @@ export function WdcPredictionForm({
               const isDragOver = dragOverIndex === index && dragIndex !== index
               const livePos = livePositionMap.get(driverId)
               const predPos = index + 1
-              const delta = livePos != null ? predPos - livePos : null
+              // Positive delta = driver is doing worse than predicted (actual pos > predicted pos)
+              // Negative delta = driver is doing better than predicted (actual pos < predicted pos)
+              const delta = livePos != null ? livePos - predPos : null
 
               return (
                 <div
@@ -263,28 +265,38 @@ export function WdcPredictionForm({
                     />
                   </div>
 
-                  {/* Live delta vs prediction */}
-                  {isLocked && hasLiveData && delta !== null && (
-                    <span
-                      className={cn(
-                        "flex flex-shrink-0 items-center gap-0.5 font-mono text-[10px]",
-                        delta === 0
-                          ? "text-muted-foreground"
-                          : delta > 0
-                          ? "text-destructive"
-                          : "text-green-500"
-                      )}
-                      title={`Live position: P${livePos}`}
-                    >
-                      {delta === 0 ? (
-                        <Minus className="h-3 w-3" />
-                      ) : delta > 0 ? (
-                        <TrendingDown className="h-3 w-3" />
-                      ) : (
-                        <TrendingUp className="h-3 w-3" />
-                      )}
-                      {delta === 0 ? "=" : Math.abs(delta)}
-                    </span>
+                  {/* Actual position + delta vs prediction */}
+                  {isLocked && hasLiveData && livePos != null && (
+                    <div className="flex flex-shrink-0 items-center gap-1.5">
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        P{livePos}
+                      </span>
+                      <span
+                        className={cn(
+                          "flex items-center gap-0.5 font-mono text-[10px]",
+                          delta === 0
+                            ? "text-muted-foreground"
+                            : delta! > 0
+                            ? "text-destructive"
+                            : "text-green-500"
+                        )}
+                        title={`Predicted P${predPos}, actual P${livePos}`}
+                      >
+                        {delta === 0 ? (
+                          <Minus className="h-3 w-3" />
+                        ) : delta! > 0 ? (
+                          <>
+                            <TrendingDown className="h-3 w-3" />
+                            {Math.abs(delta!)}
+                          </>
+                        ) : (
+                          <>
+                            <TrendingUp className="h-3 w-3" />
+                            {Math.abs(delta!)}
+                          </>
+                        )}
+                      </span>
+                    </div>
                   )}
 
                   {/* Mobile up/down arrows */}
@@ -376,8 +388,10 @@ export function WdcPredictionForm({
                 if (!driver) return null
 
                 const predictedPos = predictionPositionMap.get(standing.driver_id)
+                // Positive delta = doing worse than predicted (actual pos > predicted pos)
+                // Negative delta = doing better than predicted (actual pos < predicted pos)
                 const delta =
-                  predictedPos != null ? predictedPos - standing.position : null
+                  predictedPos != null ? standing.position - predictedPos : null
 
                 return (
                   <div
@@ -407,28 +421,40 @@ export function WdcPredictionForm({
                       />
                     </div>
 
-                    {/* Your prediction delta vs live */}
-                    {existingPrediction && delta !== null && (
-                      <span
-                        className={cn(
-                          "flex flex-shrink-0 items-center gap-0.5 font-mono text-[10px]",
-                          delta === 0
-                            ? "text-muted-foreground"
-                            : delta < 0
-                            ? "text-destructive"
-                            : "text-green-500"
+                    {/* Your predicted position + delta */}
+                    {existingPrediction && predictedPos != null && (
+                      <div className="flex flex-shrink-0 items-center gap-1.5">
+                        <span className="font-mono text-[10px] text-muted-foreground">
+                          P{predictedPos}
+                        </span>
+                        {delta !== null && (
+                          <span
+                            className={cn(
+                              "flex items-center gap-0.5 font-mono text-[10px]",
+                              delta === 0
+                                ? "text-muted-foreground"
+                                : delta > 0
+                                ? "text-destructive"
+                                : "text-green-500"
+                            )}
+                            title={`Actual P${standing.position}, you predicted P${predictedPos}`}
+                          >
+                            {delta === 0 ? (
+                              <Minus className="h-3 w-3" />
+                            ) : delta > 0 ? (
+                              <>
+                                <TrendingDown className="h-3 w-3" />
+                                {Math.abs(delta)}
+                              </>
+                            ) : (
+                              <>
+                                <TrendingUp className="h-3 w-3" />
+                                {Math.abs(delta)}
+                              </>
+                            )}
+                          </span>
                         )}
-                        title={`You predicted P${predictedPos}`}
-                      >
-                        {delta === 0 ? (
-                          <Minus className="h-3 w-3" />
-                        ) : delta < 0 ? (
-                          <TrendingDown className="h-3 w-3" />
-                        ) : (
-                          <TrendingUp className="h-3 w-3" />
-                        )}
-                        {delta === 0 ? "=" : Math.abs(delta)}
-                      </span>
+                      </div>
                     )}
 
                     <span className="w-8 flex-shrink-0 text-right font-mono text-xs font-bold tabular-nums">
