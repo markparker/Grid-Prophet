@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/session"
 import { fetchCarData, fetchLaps } from "@/lib/openf1"
 import { cacheGet, cacheSet } from "@/lib/openf1-cache"
+import { parseDriverParams } from "@/lib/telemetry-route"
 
 export interface LapEnergy {
   lap: number
@@ -19,7 +20,6 @@ function aggregateEnergy(
 ): LapEnergy[] {
   if (!laps.length || !carData.length) return []
 
-  // Sort laps and build time boundaries
   const sortedLaps = laps
     .filter((l) => !l.is_pit_out_lap && l.lap_number > 0)
     .sort((a, b) => a.lap_number - b.lap_number)
@@ -84,16 +84,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  const { searchParams } = new URL(request.url)
-  const sessionKey = Number(searchParams.get("session_key"))
-  const driverNumber = Number(searchParams.get("driver_number"))
-
-  if (!sessionKey || !driverNumber) {
-    return NextResponse.json(
-      { error: "Missing session_key or driver_number" },
-      { status: 400 }
-    )
-  }
+  const params = parseDriverParams(request)
+  if (params instanceof NextResponse) return params
+  const { sessionKey, driverNumber } = params
 
   const cacheKey = `openf1:energy:${sessionKey}:${driverNumber}`
   const cached = cacheGet<LapEnergy[]>(cacheKey)
@@ -111,7 +104,6 @@ export async function GET(request: NextRequest) {
   }
 
   const energy = aggregateEnergy(carData, laps)
-
   cacheSet(cacheKey, energy)
   return NextResponse.json({ energy })
 }

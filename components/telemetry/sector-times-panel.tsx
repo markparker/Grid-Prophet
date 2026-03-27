@@ -75,6 +75,19 @@ function processLaps(laps: OpenF1Lap[]) {
   return { raceLaps, bestS1, bestS2, bestS3, bestLap, maxLap }
 }
 
+function eventColor(type: RaceEvent["type"]): string {
+  if (type === "red_flag") return "#ef4444"
+  if (type === "safety_car" || type === "vsc") return "#f59e0b"
+  return "#eab308"
+}
+
+function eventLabel(type: RaceEvent["type"]): string {
+  if (type === "safety_car") return "SC"
+  if (type === "vsc") return "VSC"
+  if (type === "red_flag") return "RED"
+  return "!"
+}
+
 function isEndMessage(msg: string): boolean {
   return (
     msg.includes("ENDING") ||
@@ -206,6 +219,84 @@ export function SectorTimesPanel({
     return "text-foreground"
   }
 
+  function renderLapRows() {
+    const d1Map = new Map<number, OpenF1Lap>()
+    for (const l of d1.raceLaps) d1Map.set(l.lap_number, l)
+
+    const d2Map = new Map<number, OpenF1Lap>()
+    if (isComparing && d2) {
+      for (const l of d2.raceLaps) d2Map.set(l.lap_number, l)
+    }
+
+    const eventLaps = new Map<number, RaceEvent["type"]>()
+    for (const evt of raceEvents) {
+      const end = evt.lapEnd ?? evt.lapStart
+      for (let l = evt.lapStart; l <= end; l++) {
+        if (!eventLaps.has(l) || evt.type === "red_flag" || evt.type === "safety_car") {
+          eventLaps.set(l, evt.type)
+        }
+      }
+    }
+
+    const pitLaps1 = new Set(pits?.map((p) => p.lap_number) ?? [])
+    const pitLaps2 = new Set(pits2?.map((p) => p.lap_number) ?? [])
+
+    const maxLap = Math.max(d1.maxLap, d2?.maxLap ?? 0)
+    const lapNumbers = Array.from({ length: maxLap }, (_, i) => i + 1)
+
+    return lapNumbers.map((lapNum) => {
+      const lap1 = d1Map.get(lapNum)
+      const lap2 = d2Map.get(lapNum)
+      const evtType = eventLaps.get(lapNum)
+      const isPit1 = pitLaps1.has(lapNum)
+      const isPit2 = pitLaps2.has(lapNum)
+
+      return (
+        <tr key={lapNum} className={`border-b border-border/10 ${evtType ? "bg-amber-500/5" : ""}`}>
+          <td className="px-1 py-0.5 text-muted-foreground">
+            <span className="flex items-center gap-1">
+              {lapNum}
+              {isPit1 && <span style={{ color: teamColor }} title={`${driverLabel ?? "D1"} pit stop`}>P</span>}
+              {isPit2 && <span style={{ color: teamColor2 }} title={`${driverLabel2 ?? "D2"} pit stop`}>P</span>}
+              {evtType === "safety_car" && <span className="text-amber-500" title="Safety Car">&#9873;</span>}
+              {evtType === "vsc" && <span className="text-amber-500/70" title="Virtual Safety Car">&#9873;</span>}
+              {evtType === "red_flag" && <span className="text-red-500" title="Red Flag">&#9873;</span>}
+              {evtType === "incident" && <span className="text-yellow-500" title="Incident">!</span>}
+            </span>
+          </td>
+          <td className={`px-1 py-0.5 text-right ${lap1 ? sectorClass(lap1.duration_sector_1, d1.bestS1) : "text-muted-foreground/30"}`}>
+            {lap1 ? formatTime(lap1.duration_sector_1) : "—"}
+          </td>
+          <td className={`px-1 py-0.5 text-right ${lap1 ? sectorClass(lap1.duration_sector_2, d1.bestS2) : "text-muted-foreground/30"}`}>
+            {lap1 ? formatTime(lap1.duration_sector_2) : "—"}
+          </td>
+          <td className={`px-1 py-0.5 text-right ${lap1 ? sectorClass(lap1.duration_sector_3, d1.bestS3) : "text-muted-foreground/30"}`}>
+            {lap1 ? formatTime(lap1.duration_sector_3) : "—"}
+          </td>
+          <td className={`px-1 py-0.5 text-right ${lap1 ? sectorClass(lap1.lap_duration, d1.bestLap) : "text-muted-foreground/30"}`}>
+            {lap1 ? formatTime(lap1.lap_duration) : "—"}
+          </td>
+          {isComparing && (
+            <>
+              <td className={`px-1 py-0.5 text-right ${lap2 ? sectorClass(lap2.duration_sector_1, d2!.bestS1) : "text-muted-foreground/30"}`}>
+                {lap2 ? formatTime(lap2.duration_sector_1) : "—"}
+              </td>
+              <td className={`px-1 py-0.5 text-right ${lap2 ? sectorClass(lap2.duration_sector_2, d2!.bestS2) : "text-muted-foreground/30"}`}>
+                {lap2 ? formatTime(lap2.duration_sector_2) : "—"}
+              </td>
+              <td className={`px-1 py-0.5 text-right ${lap2 ? sectorClass(lap2.duration_sector_3, d2!.bestS3) : "text-muted-foreground/30"}`}>
+                {lap2 ? formatTime(lap2.duration_sector_3) : "—"}
+              </td>
+              <td className={`px-1 py-0.5 text-right ${lap2 ? sectorClass(lap2.lap_duration, d2!.bestLap) : "text-muted-foreground/30"}`}>
+                {lap2 ? formatTime(lap2.lap_duration) : "—"}
+              </td>
+            </>
+          )}
+        </tr>
+      )
+    })
+  }
+
   if (error) {
     return (
       <Card className="border-border/30 bg-card/80 backdrop-blur-sm">
@@ -307,15 +398,8 @@ export function SectorTimesPanel({
                     )}
                     {/* Safety car / incident markers */}
                     {raceEvents.map((evt, i) => {
-                      const color =
-                        evt.type === "red_flag" ? "#ef4444" :
-                        evt.type === "safety_car" ? "#f59e0b" :
-                        evt.type === "vsc" ? "#f59e0b" :
-                        "#eab308"
-                      const label =
-                        evt.type === "safety_car" ? "SC" :
-                        evt.type === "vsc" ? "VSC" :
-                        evt.type === "red_flag" ? "RED" : "!"
+                      const color = eventColor(evt.type)
+                      const label = eventLabel(evt.type)
                       const isDashed = evt.type === "vsc" || evt.type === "incident"
 
                       return [
@@ -492,84 +576,7 @@ export function SectorTimesPanel({
                   </tr>
                 </thead>
                 <tbody className="font-mono">
-                  {(() => {
-                    const d2Map = new Map<number, OpenF1Lap>()
-                    if (isComparing && d2) {
-                      for (const l of d2.raceLaps) d2Map.set(l.lap_number, l)
-                    }
-
-                    // Always show all laps from 1 to max across both drivers
-                    const maxLap = Math.max(d1.maxLap, d2?.maxLap ?? 0)
-                    const sorted = Array.from({ length: maxLap }, (_, i) => i + 1)
-
-                    const d1Map = new Map<number, OpenF1Lap>()
-                    for (const l of d1.raceLaps) d1Map.set(l.lap_number, l)
-
-                    const eventLaps = new Map<number, RaceEvent["type"]>()
-                    for (const evt of raceEvents) {
-                      const end = evt.lapEnd ?? evt.lapStart
-                      for (let l = evt.lapStart; l <= end; l++) {
-                        if (!eventLaps.has(l) || evt.type === "red_flag" || evt.type === "safety_car") {
-                          eventLaps.set(l, evt.type)
-                        }
-                      }
-                    }
-
-                    const pitLaps1 = new Set(pits?.map((p) => p.lap_number) ?? [])
-                    const pitLaps2 = new Set(pits2?.map((p) => p.lap_number) ?? [])
-
-                    return sorted.map((lapNum) => {
-                      const lap1 = d1Map.get(lapNum)
-                      const lap2 = d2Map.get(lapNum)
-                      const evtType = eventLaps.get(lapNum)
-                      const isPit1 = pitLaps1.has(lapNum)
-                      const isPit2 = pitLaps2.has(lapNum)
-
-                      return (
-                        <tr key={lapNum} className={`border-b border-border/10 ${evtType ? "bg-amber-500/5" : ""}`}>
-                          <td className="px-1 py-0.5 text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              {lapNum}
-                              {isPit1 && <span style={{ color: teamColor }} title={`${driverLabel ?? "D1"} pit stop`}>P</span>}
-                              {isPit2 && <span style={{ color: teamColor2 }} title={`${driverLabel2 ?? "D2"} pit stop`}>P</span>}
-                              {evtType === "safety_car" && <span className="text-amber-500" title="Safety Car">&#9873;</span>}
-                              {evtType === "vsc" && <span className="text-amber-500/70" title="Virtual Safety Car">&#9873;</span>}
-                              {evtType === "red_flag" && <span className="text-red-500" title="Red Flag">&#9873;</span>}
-                              {evtType === "incident" && <span className="text-yellow-500" title="Incident">!</span>}
-                            </span>
-                          </td>
-                          <td className={`px-1 py-0.5 text-right ${lap1 ? sectorClass(lap1.duration_sector_1, d1.bestS1) : "text-muted-foreground/30"}`}>
-                            {lap1 ? formatTime(lap1.duration_sector_1) : "—"}
-                          </td>
-                          <td className={`px-1 py-0.5 text-right ${lap1 ? sectorClass(lap1.duration_sector_2, d1.bestS2) : "text-muted-foreground/30"}`}>
-                            {lap1 ? formatTime(lap1.duration_sector_2) : "—"}
-                          </td>
-                          <td className={`px-1 py-0.5 text-right ${lap1 ? sectorClass(lap1.duration_sector_3, d1.bestS3) : "text-muted-foreground/30"}`}>
-                            {lap1 ? formatTime(lap1.duration_sector_3) : "—"}
-                          </td>
-                          <td className={`px-1 py-0.5 text-right ${lap1 ? sectorClass(lap1.lap_duration, d1.bestLap) : "text-muted-foreground/30"}`}>
-                            {lap1 ? formatTime(lap1.lap_duration) : "—"}
-                          </td>
-                          {isComparing && (
-                            <>
-                              <td className={`px-1 py-0.5 text-right ${lap2 ? sectorClass(lap2.duration_sector_1, d2!.bestS1) : "text-muted-foreground/30"}`}>
-                                {lap2 ? formatTime(lap2.duration_sector_1) : "—"}
-                              </td>
-                              <td className={`px-1 py-0.5 text-right ${lap2 ? sectorClass(lap2.duration_sector_2, d2!.bestS2) : "text-muted-foreground/30"}`}>
-                                {lap2 ? formatTime(lap2.duration_sector_2) : "—"}
-                              </td>
-                              <td className={`px-1 py-0.5 text-right ${lap2 ? sectorClass(lap2.duration_sector_3, d2!.bestS3) : "text-muted-foreground/30"}`}>
-                                {lap2 ? formatTime(lap2.duration_sector_3) : "—"}
-                              </td>
-                              <td className={`px-1 py-0.5 text-right ${lap2 ? sectorClass(lap2.lap_duration, d2!.bestLap) : "text-muted-foreground/30"}`}>
-                                {lap2 ? formatTime(lap2.lap_duration) : "—"}
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      )
-                    })
-                  })()}
+                  {renderLapRows()}
                 </tbody>
               </table>
             </div>

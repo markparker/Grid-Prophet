@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/session"
 import { fetchCarData, fetchLaps, aggregateCarStats } from "@/lib/openf1"
 import { cacheGet, cacheSet } from "@/lib/openf1-cache"
+import { parseDriverParams } from "@/lib/telemetry-route"
 
 export async function GET(request: NextRequest) {
   const session = await getSession()
@@ -9,24 +10,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  const { searchParams } = new URL(request.url)
-  const sessionKey = Number(searchParams.get("session_key"))
-  const driverNumber = Number(searchParams.get("driver_number"))
-
-  if (!sessionKey || !driverNumber) {
-    return NextResponse.json(
-      { error: "Missing session_key or driver_number" },
-      { status: 400 }
-    )
-  }
+  const params = parseDriverParams(request)
+  if (params instanceof NextResponse) return params
+  const { sessionKey, driverNumber } = params
 
   const cacheKey = `openf1:car-stats:${sessionKey}:${driverNumber}`
-  const cached = cacheGet<typeof stats>(cacheKey)
+  const cached = cacheGet<ReturnType<typeof aggregateCarStats>>(cacheKey)
   if (cached) {
     return NextResponse.json({ stats: cached })
   }
 
-  // Fetch car data and laps in parallel for aggregation
   const [carData, laps] = await Promise.all([
     fetchCarData(sessionKey, driverNumber),
     fetchLaps(sessionKey, driverNumber),
@@ -37,7 +30,6 @@ export async function GET(request: NextRequest) {
   }
 
   const stats = aggregateCarStats(carData, laps)
-
   cacheSet(cacheKey, stats)
   return NextResponse.json({ stats })
 }
