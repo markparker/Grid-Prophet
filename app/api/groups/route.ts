@@ -5,7 +5,7 @@ import { sendInviteCodeEmail, sendLeagueWelcomeEmail } from "@/lib/email"
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { action, name, inviteCode, playerName, email, googleId, avatarUrl } = body
+  const { action, name, inviteCode, playerName, email, avatarUrl } = body
 
   const supabase = await createClient()
 
@@ -30,8 +30,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: groupError.message }, { status: 500 })
     }
 
-    const playerInsert: Record<string, string | boolean> = { group_id: group.id, name: playerName, last_login: new Date().toISOString(), login_method: 'invite' }
-    if (googleId) playerInsert.google_id = googleId
+    const playerInsert: Record<string, string | boolean> = { group_id: group.id, name: playerName, last_login: new Date().toISOString(), login_method: 'clerk' }
     if (email) playerInsert.email = email
     if (avatarUrl) playerInsert.avatar_url = avatarUrl
 
@@ -53,7 +52,7 @@ export async function POST(request: NextRequest) {
         groupName: group.name,
         avatarUrl: player.avatar_url || "",
         email: player.email || "",
-        googleLinked: !!player.google_id,
+        googleLinked: false,
       })
       console.log("[v0] Session set for player:", player.name, "group:", group.name)
     } catch (sessionError) {
@@ -110,13 +109,12 @@ export async function POST(request: NextRequest) {
         groupName: group.name,
         avatarUrl: existingPlayer.avatar_url || "",
         email: existingPlayer.email || "",
-        googleLinked: !!existingPlayer.google_id,
+        googleLinked: false,
       })
       return NextResponse.json({ group, player: existingPlayer })
     }
 
-    const joinInsert: Record<string, string | boolean> = { group_id: group.id, name: playerName, last_login: new Date().toISOString(), login_method: 'invite' }
-    if (googleId) joinInsert.google_id = googleId
+    const joinInsert: Record<string, string | boolean> = { group_id: group.id, name: playerName, last_login: new Date().toISOString(), login_method: 'clerk' }
     if (email) joinInsert.email = email
     if (avatarUrl) joinInsert.avatar_url = avatarUrl
 
