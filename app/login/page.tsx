@@ -12,8 +12,8 @@ export default function LoginPage() {
         </div>
         <SignIn 
           routing="hash"
-          forceRedirectUrl="/dashboard"
-          signUpForceRedirectUrl="/join"
+          forceRedirectUrl="/auth/check"
+          signUpForceRedirectUrl="/auth/check"
         />
       </div>
     </div>
