@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useClerk } from "@clerk/nextjs"
 import {
   LayoutDashboard,
   Flag,
@@ -42,6 +43,7 @@ export function Nav({
 }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { signOut } = useClerk()
 
   const initials = playerName
     .split(" ")
@@ -51,8 +53,10 @@ export function Nav({
     .slice(0, 2)
 
   async function handleLogout() {
+    // Delete the cookie session
     await fetch("/api/session", { method: "DELETE" })
-    window.location.href = "/"
+    // Sign out from Clerk
+    await signOut({ redirectUrl: "/" })
   }
 
   return (
