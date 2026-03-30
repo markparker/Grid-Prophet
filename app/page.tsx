@@ -1,14 +1,22 @@
 import { Suspense } from "react"
 import { redirect } from "next/navigation"
+import { auth } from "@clerk/nextjs/server"
 import { getSession } from "@/lib/session"
 import { JoinForm } from "@/components/join-form"
 import { Flag, Trophy, Users, TrendingUp, Target, Medal, ChevronRight } from "lucide-react"
 import Link from "next/link"
 
 export default async function LandingPage() {
-  const session = await getSession()
-  if (session) {
-    redirect("/dashboard")
+  // Check Clerk auth first - if signed in with Clerk, route through /auth/check
+  // which sets the cookie session and redirects to dashboard
+  const { userId } = await auth()
+  if (userId) {
+    const session = await getSession()
+    if (session) {
+      redirect("/dashboard")
+    } else {
+      redirect("/auth/check")
+    }
   }
 
   return (
@@ -28,9 +36,10 @@ export default async function LandingPage() {
             </div>
             <Link 
               href="/login" 
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-secondary transition-colors"
             >
               Sign In
+              <ChevronRight className="h-3.5 w-3.5" />
             </Link>
           </nav>
 
