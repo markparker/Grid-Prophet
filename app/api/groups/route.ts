@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: groupError.message }, { status: 500 })
     }
 
-    const playerInsert: Record<string, string | boolean> = { group_id: group.id, name: playerName, last_login: new Date().toISOString() }
+    const playerInsert: Record<string, string | boolean> = { group_id: group.id, name: playerName, last_login: new Date().toISOString(), login_method: 'invite' }
     if (googleId) playerInsert.google_id = googleId
     if (email) playerInsert.email = email
     if (avatarUrl) playerInsert.avatar_url = avatarUrl
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ group, player: existingPlayer })
     }
 
-    const joinInsert: Record<string, string | boolean> = { group_id: group.id, name: playerName, last_login: new Date().toISOString() }
+    const joinInsert: Record<string, string | boolean> = { group_id: group.id, name: playerName, last_login: new Date().toISOString(), login_method: 'invite' }
     if (googleId) joinInsert.google_id = googleId
     if (email) joinInsert.email = email
     if (avatarUrl) joinInsert.avatar_url = avatarUrl
