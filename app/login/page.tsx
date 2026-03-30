@@ -10,9 +10,10 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold tracking-tight mb-2">Grid Prophet</h1>
           <p className="text-muted-foreground">Sign in to start predicting F1 races</p>
         </div>
-        <SignIn
-          afterSignInUrl="/dashboard"
-          signUpUrl="/join"
+        <SignIn 
+          routing="hash"
+          forceRedirectUrl="/dashboard"
+          signUpForceRedirectUrl="/join"
         />
       </div>
     </div>
