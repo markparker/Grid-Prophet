@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useSearchParams } from "next/navigation"
+import { useUser } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,42 +15,15 @@ import {
 } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
-import { createClient } from "@/lib/supabase/client"
 
 export function JoinForm() {
+  const { user, isSignedIn } = useUser()
   const [loading, setLoading] = useState(false)
-  const [googleLoading, setGoogleLoading] = useState(false)
   const searchParams = useSearchParams()
-
-  // Prefill from Google OAuth callback
-  const googleId = searchParams.get("google_id") || ""
-  const googleEmail = searchParams.get("email") || ""
-  const googleName = searchParams.get("name") || ""
-  const googleAvatarUrl = searchParams.get("avatar_url") || ""
   const authError = searchParams.get("error")
 
-  useEffect(() => {
-    if (authError === "auth_failed") {
-      toast.error("Google sign-in failed. Please try again.")
-    }
-    if (googleId) {
-      toast.info("Signed in with Google! Now create or join a prediction league.")
-    }
-  }, [authError, googleId])
-
-  async function handleGoogleSignIn() {
-    setGoogleLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-    if (error) {
-      toast.error("Failed to start Google sign-in")
-      setGoogleLoading(false)
-    }
+  if (authError === "auth_failed") {
+    toast.error("Sign in failed. Please try again.")
   }
 
   async function handleJoin(e: React.FormEvent<HTMLFormElement>) {
@@ -58,10 +32,9 @@ export function JoinForm() {
     const form = new FormData(e.currentTarget)
     const inviteCode = (form.get("inviteCode") as string).trim()
     const playerName = (form.get("playerName") as string).trim()
-    const joinEmail = (form.get("joinEmail") as string)?.trim() || ""
-    const emailToUse = googleEmail || joinEmail
+    const email = user?.primaryEmailAddress?.emailAddress || ""
 
-    if (!inviteCode || !playerName || !emailToUse) {
+    if (!inviteCode || !playerName) {
       toast.error("Please fill in all fields")
       setLoading(false)
       return
@@ -75,9 +48,7 @@ export function JoinForm() {
           action: "join",
           inviteCode,
           playerName,
-          email: emailToUse,
-          googleId: googleId || undefined,
-          avatarUrl: googleAvatarUrl || undefined,
+          email,
         }),
       })
       const data = await res.json()
@@ -100,17 +71,10 @@ export function JoinForm() {
     const form = new FormData(e.currentTarget)
     const groupName = (form.get("groupName") as string).trim()
     const playerName = (form.get("playerName") as string).trim()
+    const email = user?.primaryEmailAddress?.emailAddress || ""
 
-    if (!groupName || !playerName) {
+    if (!groupName || !playerName || !email) {
       toast.error("Please fill in all fields")
-      setLoading(false)
-      return
-    }
-
-    const email = (form.get("email") as string).trim()
-
-    if (!email) {
-      toast.error("Please enter your email to receive the invite code")
       setLoading(false)
       return
     }
@@ -124,8 +88,6 @@ export function JoinForm() {
           name: groupName,
           playerName,
           email,
-          googleId: googleId || undefined,
-          avatarUrl: googleAvatarUrl || undefined,
         }),
       })
       const data = await res.json()
@@ -141,16 +103,14 @@ export function JoinForm() {
           `League created! Invite code: ${data.group.invite_code} (email could not be sent)`
         )
       }
-      console.log("[v0] Create success, invite_code:", data.group.invite_code, "group name:", data.group.name)
       const shareParams = new URLSearchParams({
         code: data.group.invite_code,
         name: data.group.name,
       })
       const shareUrl = `/share?${shareParams.toString()}`
-      console.log("[v0] Redirecting to share page:", shareUrl)
       window.location.href = shareUrl
     } catch (err) {
-      console.error("[v0] Create league error:", err)
+      console.error("Create league error:", err)
       toast.error("Something went wrong")
       setLoading(false)
     }
@@ -158,61 +118,28 @@ export function JoinForm() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Google Sign-In for returning users */}
-      {!googleId && (
-        <Card className="bg-card border-border">
-          <CardContent className="pt-6">
-            <div className="flex flex-col gap-3">
-              <p className="text-sm text-muted-foreground text-center">
-                Already in a prediction league? Sign back in instantly.
-              </p>
-              <Button
-                variant="outline"
-                className="w-full gap-3"
-                onClick={handleGoogleSignIn}
-                disabled={googleLoading}
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24">
-                  <path
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-                    fill="#4285F4"
-                  />
-                  <path
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    fill="#34A853"
-                  />
-                  <path
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    fill="#FBBC05"
-                  />
-                  <path
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    fill="#EA4335"
-                  />
-                </svg>
-                {googleLoading ? "Redirecting..." : "Sign in with Google"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Show Google account info if signed in */}
-      {googleId && (
+      {/* Show user info if signed in with Clerk */}
+      {isSignedIn && user && (
         <Card className="bg-card border-primary/20 border-2">
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                {googleName.charAt(0).toUpperCase()}
-              </div>
+              {user.imageUrl && (
+                <img
+                  src={user.imageUrl}
+                  alt={user.firstName || "User"}
+                  className="h-9 w-9 rounded-full"
+                />
+              )}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{googleName}</p>
+                <p className="text-sm font-medium truncate">
+                  {user.firstName} {user.lastName}
+                </p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {googleEmail}
+                  {user.primaryEmailAddress?.emailAddress}
                 </p>
               </div>
               <span className="text-xs text-primary font-medium shrink-0">
-                Google connected
+                Signed in
               </span>
             </div>
           </CardContent>
@@ -251,28 +178,10 @@ export function JoinForm() {
                     id="join-name"
                     name="playerName"
                     placeholder="e.g., Lewis"
-                    defaultValue={googleName}
+                    defaultValue={user?.firstName || ""}
                     required
                   />
                 </div>
-                {!googleEmail && (
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="join-email">Your Email</Label>
-                    <Input
-                      id="join-email"
-                      name="joinEmail"
-                      type="email"
-                      placeholder="e.g., lewis@example.com"
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      We&apos;ll send you the league details to share with friends.
-                    </p>
-                  </div>
-                )}
-                {googleEmail && (
-                  <input type="hidden" name="joinEmail" value={googleEmail} />
-                )}
                 <Button type="submit" disabled={loading} className="w-full">
                   {loading ? "Joining..." : "Join League"}
                 </Button>
@@ -300,23 +209,9 @@ export function JoinForm() {
                     id="create-name"
                     name="playerName"
                     placeholder="e.g., Lewis"
-                    defaultValue={googleName}
+                    defaultValue={user?.firstName || ""}
                     required
                   />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="create-email">Your Email</Label>
-                  <Input
-                    id="create-email"
-                    name="email"
-                    type="email"
-                    placeholder="e.g., lewis@example.com"
-                    defaultValue={googleEmail}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    The invite code will be emailed to you.
-                  </p>
                 </div>
                 <Button type="submit" disabled={loading} className="w-full">
                   {loading ? "Creating..." : "Create League"}
