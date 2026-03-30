@@ -35,6 +35,7 @@ export default async function DashboardPage() {
       .from("races")
       .select("*")
       .gte("race_date", today)
+      .neq("status", "canceled")
       .order("race_date", { ascending: true })
       .limit(1)
       .single(),
@@ -43,6 +44,7 @@ export default async function DashboardPage() {
       .select("*")
       .lt("race_date", today)
       .eq("results_fetched", true)
+      .neq("status", "canceled")
       .order("race_date", { ascending: false })
       .limit(1)
       .single(),
