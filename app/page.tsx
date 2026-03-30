@@ -27,7 +27,7 @@ export default async function LandingPage() {
               <span className="font-bold text-lg">Grid Prophet</span>
             </div>
             <Link 
-              href="#join" 
+              href="/login" 
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Sign In
