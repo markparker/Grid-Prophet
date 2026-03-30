@@ -146,11 +146,13 @@ export default async function AdminPage() {
                       <td className="py-3 px-4">
                         {user.login_method ? (
                           <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                            user.login_method === 'google' 
+                            user.login_method === 'clerk' 
+                              ? 'bg-green-500/10 text-green-600' 
+                              : user.login_method === 'google'
                               ? 'bg-blue-500/10 text-blue-600' 
                               : 'bg-purple-500/10 text-purple-600'
                           }`}>
-                            {user.login_method === 'google' ? 'Google' : 'Invite'}
+                            {user.login_method === 'clerk' ? 'Clerk' : user.login_method === 'google' ? 'Google' : 'Invite'}
                           </span>
                         ) : (
                           <span className="text-muted-foreground text-xs">—</span>
