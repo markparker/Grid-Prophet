@@ -98,10 +98,13 @@ export async function GET(request: Request) {
 
           const isFirstGoogleSignIn = !player.google_id
 
-          // Update last_login timestamp
+          // Update last_login and login_method
           await supabase
             .from("players")
-            .update({ last_login: new Date().toISOString() })
+            .update({ 
+              last_login: new Date().toISOString(),
+              login_method: 'google'
+            })
             .eq("id", player.id)
 
           await setSession({

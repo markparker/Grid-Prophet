@@ -17,7 +17,7 @@ export default async function AdminPage() {
   // Fetch all users with their leagues
   const { data: users, error: usersError } = await supabase
     .from("players")
-    .select("id, name, email, group_id, last_login, created_at, groups(name, invite_code)")
+    .select("id, name, email, group_id, last_login, login_method, created_at, groups(name, invite_code)")
     .order("last_login", { ascending: false, nullsFirst: false })
 
   const stats = {
@@ -107,6 +107,7 @@ export default async function AdminPage() {
                   <th className="text-left py-3 px-4 font-medium">Email</th>
                   <th className="text-left py-3 px-4 font-medium">League</th>
                   <th className="text-left py-3 px-4 font-medium">Last Login</th>
+                  <th className="text-left py-3 px-4 font-medium">Method</th>
                   <th className="text-left py-3 px-4 font-medium">Joined</th>
                 </tr>
               </thead>
@@ -140,6 +141,19 @@ export default async function AdminPage() {
                           <span className="text-muted-foreground text-xs italic">
                             Not tracked yet
                           </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        {user.login_method ? (
+                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                            user.login_method === 'google' 
+                              ? 'bg-blue-500/10 text-blue-600' 
+                              : 'bg-purple-500/10 text-purple-600'
+                          }`}>
+                            {user.login_method === 'google' ? 'Google' : 'Invite'}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
                         )}
                       </td>
                       <td className="py-3 px-4 text-muted-foreground">
