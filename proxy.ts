@@ -1,7 +1,8 @@
+import { clerkMiddleware } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export function proxy(request: NextRequest) {
-  return NextResponse.next()
+  return clerkMiddleware()(request as any) as NextResponse
 }
 
 export const config = {
