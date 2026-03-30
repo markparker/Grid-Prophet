@@ -137,7 +137,9 @@ export default async function AdminPage() {
                             })}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground">Never</span>
+                          <span className="text-muted-foreground text-xs italic">
+                            Not tracked yet
+                          </span>
                         )}
                       </td>
                       <td className="py-3 px-4 text-muted-foreground">
