@@ -88,7 +88,7 @@ const steps = [
           </ul>
         </div>
         <p className="text-xs text-muted-foreground text-center">
-          Perfect prediction = 25 points per driver position
+          Exact position = 3 pts, off by 1 = 1 pt (max 30 pts per race)
         </p>
       </div>
     ),
@@ -160,36 +160,42 @@ const steps = [
     title: "Ready to Start?",
     description: "Join or create a league to begin predicting.",
     icon: TrendingUp,
-    content: (
-      <div className="space-y-4">
-        <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-center">
-          <p className="text-sm text-muted-foreground mb-2">
-            To start making predictions, you need to be part of a league.
-          </p>
-          <p className="font-medium text-primary">
-            Create your own or join an existing one!
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Card className="bg-card/50 border-border">
-            <CardContent className="p-4 text-center">
-              <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-              <p className="text-sm font-medium">Join League</p>
-              <p className="text-xs text-muted-foreground">Use an invite code</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-card/50 border-border">
-            <CardContent className="p-4 text-center">
-              <Trophy className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-              <p className="text-sm font-medium">Create League</p>
-              <p className="text-xs text-muted-foreground">Invite your friends</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    ),
+    content: null, // Rendered dynamically with onComplete callback
   },
 ]
+
+function LastStepContent({ onComplete }: { onComplete: () => void }) {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-center">
+        <p className="text-sm text-muted-foreground mb-2">
+          To start making predictions, you need to be part of a league.
+        </p>
+        <p className="font-medium text-primary">
+          Create your own or join an existing one!
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={onComplete}
+          className="rounded-lg border border-border bg-card/50 p-4 text-center hover:bg-card hover:border-primary/50 transition-colors"
+        >
+          <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+          <p className="text-sm font-medium">Join League</p>
+          <p className="text-xs text-muted-foreground">Use an invite code</p>
+        </button>
+        <button
+          onClick={onComplete}
+          className="rounded-lg border border-border bg-card/50 p-4 text-center hover:bg-card hover:border-primary/50 transition-colors"
+        >
+          <Trophy className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+          <p className="text-sm font-medium">Create League</p>
+          <p className="text-xs text-muted-foreground">Invite your friends</p>
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export function Onboarding({ userName, onComplete }: OnboardingProps) {
   const [currentStep, setCurrentStep] = useState(0)
@@ -268,7 +274,11 @@ export function Onboarding({ userName, onComplete }: OnboardingProps) {
 
             {/* Step content */}
             <div className="mb-6">
-              {step.content}
+              {isLastStep ? (
+                <LastStepContent onComplete={handleComplete} />
+              ) : (
+                step.content
+              )}
             </div>
 
             {/* Show again checkbox (only on last step) */}
