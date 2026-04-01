@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { useUser } from "@clerk/nextjs"
+import { useUser, useClerk } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,15 +15,26 @@ import {
 } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
+import { LogOut, HelpCircle } from "lucide-react"
 
-export function JoinForm() {
+interface JoinFormProps {
+  onShowTour?: () => void
+}
+
+export function JoinForm({ onShowTour }: JoinFormProps) {
   const { user, isSignedIn } = useUser()
+  const { signOut } = useClerk()
   const [loading, setLoading] = useState(false)
   const searchParams = useSearchParams()
   const authError = searchParams.get("error")
 
   if (authError === "auth_failed") {
     toast.error("Sign in failed. Please try again.")
+  }
+
+  async function handleSignOut() {
+    await fetch("/api/session", { method: "DELETE" })
+    await signOut({ redirectUrl: "/" })
   }
 
   async function handleJoin(e: React.FormEvent<HTMLFormElement>) {
@@ -138,9 +149,28 @@ export function JoinForm() {
                   {user.primaryEmailAddress?.emailAddress}
                 </p>
               </div>
-              <span className="text-xs text-primary font-medium shrink-0">
-                Signed in
-              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                {onShowTour && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={onShowTour}
+                    title="Show tour"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={handleSignOut}
+                  title="Sign out"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
