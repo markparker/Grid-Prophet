@@ -7,16 +7,17 @@ import { Flag, Trophy, Users, TrendingUp, Target, Medal, ChevronRight } from "lu
 import Link from "next/link"
 
 export default async function LandingPage() {
-  // Check Clerk auth first - if signed in with Clerk, route through /auth/check
-  // which sets the cookie session and redirects to dashboard
+  // Check cookie session first (fast) - if exists, go to dashboard
+  // Only call Clerk auth() if no session (slower, needs external API)
+  const session = await getSession()
+  if (session) {
+    redirect("/dashboard")
+  }
+  
+  // No session - check if signed in with Clerk but session not yet set
   const { userId } = await auth()
   if (userId) {
-    const session = await getSession()
-    if (session) {
-      redirect("/dashboard")
-    } else {
-      redirect("/auth/check")
-    }
+    redirect("/auth/check")
   }
 
   return (

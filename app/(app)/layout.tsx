@@ -8,7 +8,6 @@ export default async function AppLayout({
   children: React.ReactNode
 }) {
   const session = await getSession()
-  console.log("[v0] App layout - session:", session ? `player=${session.playerName}, group=${session.groupName}` : "NO SESSION")
   if (!session) {
     redirect("/")
   }

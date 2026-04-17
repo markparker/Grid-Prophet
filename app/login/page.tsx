@@ -10,7 +10,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
-      router.push("/auth/check")
+      router.replace("/auth/check")
     }
   }, [isLoaded, isSignedIn, router])
 
