@@ -19,7 +19,7 @@ export default async function LeaderboardPage() {
       .eq("group_id", session.groupId),
     supabase
       .from("player_scores")
-      .select("*"),
+      .select("player_id, race_id, score_type, points"),
     supabase
       .from("races")
       .select("id, round, race_name, country, results_fetched")
