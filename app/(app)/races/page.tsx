@@ -13,7 +13,7 @@ export default async function RacesPage() {
   const [{ data: races }, { data: predictions }] = await Promise.all([
     supabase
       .from("races")
-      .select("*")
+      .select("id, round, race_name, city, country, race_date, qualifying_date, results_fetched, status, is_sprint, circuit_image")
       .order("round", { ascending: true }),
     supabase
       .from("race_predictions")
