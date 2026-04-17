@@ -9,16 +9,17 @@ export default async function RacesPage() {
 
   const supabase = await createClient()
 
-  const { data: races } = await supabase
-    .from("races")
-    .select("*")
-    .order("round", { ascending: true })
-
-  // Get all race predictions for this player
-  const { data: predictions } = await supabase
-    .from("race_predictions")
-    .select("race_id")
-    .eq("player_id", session.playerId)
+  // Fetch races and predictions in parallel
+  const [{ data: races }, { data: predictions }] = await Promise.all([
+    supabase
+      .from("races")
+      .select("*")
+      .order("round", { ascending: true }),
+    supabase
+      .from("race_predictions")
+      .select("race_id")
+      .eq("player_id", session.playerId),
+  ])
 
   const predictedRaceIds = new Set(
     (predictions || []).map((p) => p.race_id)

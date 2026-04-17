@@ -11,22 +11,20 @@ export default async function LeaderboardPage() {
 
   const supabase = await createClient()
 
-  // Get all players in group
-  const { data: players } = await supabase
-    .from("players")
-    .select("id, name")
-    .eq("group_id", session.groupId)
-
-  // Get all scores
-  const { data: scores } = await supabase
-    .from("player_scores")
-    .select("*")
-
-  // Get all races (for per-race breakdown)
-  const { data: races } = await supabase
-    .from("races")
-    .select("id, round, race_name, country, results_fetched")
-    .order("round")
+  // Fetch all data in parallel
+  const [{ data: players }, { data: scores }, { data: races }] = await Promise.all([
+    supabase
+      .from("players")
+      .select("id, name")
+      .eq("group_id", session.groupId),
+    supabase
+      .from("player_scores")
+      .select("*"),
+    supabase
+      .from("races")
+      .select("id, round, race_name, country, results_fetched")
+      .order("round"),
+  ])
 
   const completedRaces = (races || []).filter((r) => r.results_fetched)
 
