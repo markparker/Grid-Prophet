@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 
@@ -8,19 +8,22 @@ export default function AuthCheckPage() {
   const { user, isLoaded } = useUser()
   const router = useRouter()
   const [status, setStatus] = useState("Checking your account...")
+  const hasChecked = useRef(false)
 
   useEffect(() => {
     async function checkAndRedirect() {
-      if (!isLoaded) return
+      // Prevent duplicate calls
+      if (!isLoaded || hasChecked.current) return
+      hasChecked.current = true
       
       if (!user) {
-        router.push("/login")
+        router.replace("/login")
         return
       }
 
       const email = user.primaryEmailAddress?.emailAddress
       if (!email) {
-        router.push("/join")
+        router.replace("/join")
         return
       }
 
@@ -41,13 +44,13 @@ export default function AuthCheckPage() {
         const data = await res.json()
 
         if (data.redirect === "dashboard") {
-          router.push("/dashboard")
+          router.replace("/dashboard")
         } else {
-          router.push("/join")
+          router.replace("/join")
         }
       } catch (error) {
         console.error("Auth check error:", error)
-        router.push("/join")
+        router.replace("/join")
       }
     }
 

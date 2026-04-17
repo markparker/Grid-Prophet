@@ -1,35 +1,36 @@
 'use client'
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useUser } from "@clerk/nextjs"
-import { redirect } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { JoinForm } from "@/components/join-form"
 import { Onboarding } from "@/components/onboarding"
 import { Card, CardContent } from "@/components/ui/card"
 
 export default function JoinPage() {
   const { user, isSignedIn, isLoaded } = useUser()
-  const [showOnboarding, setShowOnboarding] = useState(false)
-  const [checkingOnboarding, setCheckingOnboarding] = useState(true)
+  const router = useRouter()
+  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null)
+
+  // Check onboarding status only once when loaded
+  const shouldShowOnboarding = useMemo(() => {
+    if (typeof window === 'undefined') return null
+    return !localStorage.getItem("gp_onboarding_dismissed")
+  }, [])
 
   useEffect(() => {
-    if (isLoaded && isSignedIn) {
-      // Check if user has dismissed onboarding before
-      const dismissed = localStorage.getItem("gp_onboarding_dismissed")
-      if (!dismissed) {
-        setShowOnboarding(true)
-      }
-      setCheckingOnboarding(false)
+    if (isLoaded && !isSignedIn) {
+      router.push("/login")
+      return
     }
-  }, [isLoaded, isSignedIn])
+    
+    if (isLoaded && isSignedIn && showOnboarding === null) {
+      setShowOnboarding(shouldShowOnboarding ?? false)
+    }
+  }, [isLoaded, isSignedIn, router, showOnboarding, shouldShowOnboarding])
 
-  // Redirect to login if not authenticated
-  if (isLoaded && !isSignedIn) {
-    redirect("/login")
-  }
-
-  // Show loading state while checking auth or onboarding status
-  if (!isLoaded || checkingOnboarding) {
+  // Show loading state while checking auth
+  if (!isLoaded || showOnboarding === null) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Card>
@@ -39,6 +40,11 @@ export default function JoinPage() {
         </Card>
       </div>
     )
+  }
+  
+  // Prevent render while redirecting
+  if (!isSignedIn) {
+    return null
   }
 
   // Show onboarding for first-time users

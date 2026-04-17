@@ -21,7 +21,7 @@ export default async function DashboardPage() {
   const supabase = await createClient()
   const today = new Date().toISOString().split("T")[0]
 
-  // Fetch all data in parallel
+  // Fetch all data in parallel - including predictions
   const [
     { data: nextRace },
     { data: lastRace },
@@ -30,6 +30,8 @@ export default async function DashboardPage() {
     { data: group },
     { data: myScores },
     { count: completedRaces },
+    { data: wdcPred },
+    { data: myPredictions },
   ] = await Promise.all([
     supabase
       .from("races")
@@ -66,26 +68,21 @@ export default async function DashboardPage() {
       .from("races")
       .select("id", { count: "exact", head: true })
       .eq("results_fetched", true),
-  ])
-
-  // Check if player has prediction for next race
-  let hasPrediction = false
-  if (nextRace) {
-    const { data: pred } = await supabase
-      .from("race_predictions")
+    supabase
+      .from("wdc_predictions")
       .select("id")
       .eq("player_id", session.playerId)
-      .eq("race_id", nextRace.id)
-      .single()
-    hasPrediction = !!pred
-  }
+      .single(),
+    supabase
+      .from("race_predictions")
+      .select("race_id")
+      .eq("player_id", session.playerId),
+  ])
 
-  // Check if player has WDC prediction
-  const { data: wdcPred } = await supabase
-    .from("wdc_predictions")
-    .select("id")
-    .eq("player_id", session.playerId)
-    .single()
+  // Check if player has prediction for next race (from already-fetched data)
+  const hasPrediction = nextRace 
+    ? (myPredictions || []).some((p: { race_id: string }) => p.race_id === nextRace.id)
+    : false
 
   // Build leaderboard
   const leaderboard = (players || [])
