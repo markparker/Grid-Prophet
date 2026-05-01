@@ -1,23 +1,17 @@
 import { Suspense } from "react"
 import { redirect } from "next/navigation"
-import { auth } from "@clerk/nextjs/server"
 import { getSession } from "@/lib/session"
 import { JoinForm } from "@/components/join-form"
 import { Flag, Trophy, Users, TrendingUp, Target, Medal, ChevronRight } from "lucide-react"
 import Link from "next/link"
 
 export default async function LandingPage() {
-  // Check cookie session first (fast) - if exists, go to dashboard
-  // Only call Clerk auth() if no session (slower, needs external API)
+  // Check cookie session - if exists, go to dashboard
+  // If user is signed in with Clerk but no session, they'll click Sign In
+  // which goes to /login -> /auth/check to set up the session
   const session = await getSession()
   if (session) {
     redirect("/dashboard")
-  }
-  
-  // No session - check if signed in with Clerk but session not yet set
-  const { userId } = await auth()
-  if (userId) {
-    redirect("/auth/check")
   }
 
   return (
