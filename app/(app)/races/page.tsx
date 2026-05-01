@@ -10,16 +10,21 @@ export default async function RacesPage() {
   const supabase = await createClient()
 
   // Fetch races and predictions in parallel
-  const [{ data: races }, { data: predictions }] = await Promise.all([
+  const [{ data: races, error: racesError }, { data: predictions }] = await Promise.all([
     supabase
       .from("races")
-      .select("id, round, race_name, city, country, race_date, qualifying_date, results_fetched, status, is_sprint, circuit_image")
+      .select("*")
       .order("round", { ascending: true }),
     supabase
       .from("race_predictions")
       .select("race_id")
       .eq("player_id", session.playerId),
   ])
+
+  // Debug: log any errors
+  if (racesError) {
+    console.log("[v0] Races query error:", racesError)
+  }
 
   const predictedRaceIds = new Set(
     (predictions || []).map((p) => p.race_id)
@@ -38,8 +43,14 @@ export default async function RacesPage() {
         </p>
       </div>
 
+      {(!races || races.length === 0) ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <p className="text-muted-foreground">No races found for this season.</p>
+          <p className="text-sm text-muted-foreground mt-1">Check back soon for the race calendar.</p>
+        </div>
+      ) : (
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {(races || []).map((race) => {
+        {races.map((race) => {
           const raceDate = new Date(race.race_date)
           const qualyDate = race.qualifying_date
             ? new Date(race.qualifying_date)
@@ -71,6 +82,7 @@ export default async function RacesPage() {
           )
         })}
       </div>
+      )}
     </div>
   )
 }
