@@ -4,8 +4,8 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { ArrowLeft, Users, UserCheck, Clock } from "lucide-react"
+import { ArrowLeft, Users, UserCheck, Clock, Flag } from "lucide-react"
+import { ReprocessButton } from "@/components/admin/reprocess-button"
 
 export default async function AdminPage() {
   const session = await getSession()
@@ -14,11 +14,17 @@ export default async function AdminPage() {
 
   const supabase = await createClient()
 
-  // Fetch all users with their leagues
-  const { data: users, error: usersError } = await supabase
-    .from("players")
-    .select("id, name, email, group_id, last_login, login_method, created_at, groups(name, invite_code)")
-    .order("last_login", { ascending: false, nullsFirst: false })
+  // Fetch all users with their leagues and all races
+  const [{ data: users }, { data: races }] = await Promise.all([
+    supabase
+      .from("players")
+      .select("id, name, email, group_id, last_login, login_method, created_at, groups(name, invite_code)")
+      .order("last_login", { ascending: false, nullsFirst: false }),
+    supabase
+      .from("races")
+      .select("id, round, race_name, country, race_date, results_fetched")
+      .order("round", { ascending: true }),
+  ])
 
   const stats = {
     totalPlayers: users?.length || 0,
@@ -92,6 +98,74 @@ export default async function AdminPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Race Management */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Flag className="h-5 w-5" />
+            Race Management
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Reprocess race results if they changed due to penalties or F1 API updates.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-3 px-4 font-medium">Round</th>
+                  <th className="text-left py-3 px-4 font-medium">Race</th>
+                  <th className="text-left py-3 px-4 font-medium">Date</th>
+                  <th className="text-left py-3 px-4 font-medium">Status</th>
+                  <th className="text-left py-3 px-4 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {races && races.length > 0 ? (
+                  races.filter(race => {
+                    const raceDate = new Date(race.race_date)
+                    const today = new Date()
+                    return raceDate <= today
+                  }).map((race) => (
+                    <tr key={race.id} className="border-b hover:bg-muted/50">
+                      <td className="py-3 px-4 font-mono">{race.round}</td>
+                      <td className="py-3 px-4">{race.race_name}</td>
+                      <td className="py-3 px-4 text-muted-foreground">
+                        {new Date(race.race_date).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </td>
+                      <td className="py-3 px-4">
+                        {race.results_fetched ? (
+                          <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-600">
+                            Scored
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-1 rounded-full bg-yellow-500/10 text-yellow-600">
+                            Pending
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <ReprocessButton raceId={race.id} round={race.round} raceName={race.race_name} />
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                      No past races found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Users Table */}
       <Card>
