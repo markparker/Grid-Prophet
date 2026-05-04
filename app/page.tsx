@@ -1,9 +1,9 @@
-import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { getSession } from "@/lib/session"
-import { JoinForm } from "@/components/join-form"
 import { Flag, Trophy, Users, TrendingUp, Target, Medal, ChevronRight } from "lucide-react"
 import Link from "next/link"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 
 export default async function LandingPage() {
   // Check cookie session - if exists, go to dashboard
@@ -76,11 +76,44 @@ export default async function LandingPage() {
               </div>
             </div>
 
-            {/* Right: Join Form */}
+            {/* Right: Get Started Card */}
             <div id="join" className="w-full max-w-md flex-shrink-0">
-              <Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-card" />}>
-                <JoinForm />
-              </Suspense>
+              <Card className="bg-card border-border">
+                <CardHeader className="text-center pb-4">
+                  <CardTitle className="text-xl">Get Started</CardTitle>
+                  <CardDescription>
+                    Sign in to create or join a prediction league
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Button asChild className="w-full" size="lg">
+                    <Link href="/login">
+                      Sign In to Continue
+                      <ChevronRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-border" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">Then you can</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-border bg-secondary/30 p-4 text-center">
+                      <Users className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm font-medium">Join League</p>
+                      <p className="text-xs text-muted-foreground">Use invite code</p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-secondary/30 p-4 text-center">
+                      <Trophy className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm font-medium">Create League</p>
+                      <p className="text-xs text-muted-foreground">Invite friends</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
