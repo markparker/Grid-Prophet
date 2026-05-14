@@ -23,9 +23,11 @@ F1 2026 prediction league app where users predict race results, pole positions, 
 pnpm dev          # Start dev server
 pnpm build        # Production build
 pnpm lint         # ESLint
+pnpm test         # Run tests (Vitest)
+pnpm test:watch   # Run tests in watch mode
 ```
 
-There are no tests in this codebase.
+Tests live in `__tests__/`. The framework is Vitest with the `@/` alias wired up in `vitest.config.ts`. Only pure utility modules are tested (`lib/scoring.ts`, `lib/openf1-cache.ts`) — API routes and server components depend on Supabase/Next.js internals and are not tested.
 
 ## Environment Variables
 
