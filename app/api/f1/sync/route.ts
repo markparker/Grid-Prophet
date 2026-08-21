@@ -1,10 +1,100 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { fetchRaceResults, fetchQualifyingResults } from "@/lib/f1-api"
+import {
+  fetchRaceResultsDetailed,
+  fetchQualifyingResultsDetailed,
+  fetchSeasonCalendar,
+  resolveCalendarEntry,
+  type F1Fetch,
+} from "@/lib/f1-api"
 import {
   scoreRacePrediction,
   scorePolePrediction,
 } from "@/lib/scoring"
+
+const SEASON = 2026
+
+/** Short human-readable explanation of why an upstream fetch produced no usable data. */
+function describeFailure(outcome: Extract<F1Fetch<unknown>, { ok: false }>): string {
+  switch (outcome.reason) {
+    case "http":
+      return `upstream HTTP ${outcome.status} — ${outcome.detail}`
+    case "network":
+      return `upstream unreachable — ${outcome.detail}`
+    case "empty":
+      return `upstream returned no data — ${outcome.detail}`
+    case "mismatch":
+      return `wrong race returned — ${outcome.detail}`
+  }
+}
+
+const NOT_IN_CALENDAR =
+  "not present in the upstream season calendar — this race is missing from the feed, so results cannot be sourced from it"
+
+/**
+ * Dry-run probe. Reports exactly what the upstream F1 API returns for every
+ * race that is due a sync, without writing anything. Use this to tell
+ * "results aren't published yet" apart from "the feed is broken".
+ */
+export async function GET() {
+  const supabase = await createClient()
+  const today = new Date().toISOString().split("T")[0]
+
+  const { data: pendingRaces } = await supabase
+    .from("races")
+    .select("*")
+    .lte("race_date", today)
+    .eq("results_fetched", false)
+    .order("round", { ascending: true })
+
+  const calendar = await fetchSeasonCalendar(SEASON)
+  if (!calendar.ok) {
+    return NextResponse.json(
+      { season: SEASON, today, error: `calendar unavailable: ${describeFailure(calendar)}` },
+      { status: 502 }
+    )
+  }
+
+  const probes = []
+  for (const race of pendingRaces || []) {
+    const entry = resolveCalendarEntry(calendar.entries, race.race_date)
+    if (!entry) {
+      probes.push({
+        round: race.round,
+        name: race.race_name,
+        raceDate: race.race_date,
+        upstreamRound: null,
+        problem: NOT_IN_CALENDAR,
+      })
+      continue
+    }
+
+    const [raceOutcome, qualyOutcome] = await Promise.all([
+      fetchRaceResultsDetailed(SEASON, entry.round, race.race_date),
+      fetchQualifyingResultsDetailed(SEASON, entry.round, race.race_date),
+    ])
+    probes.push({
+      round: race.round,
+      name: race.race_name,
+      raceDate: race.race_date,
+      upstreamRound: entry.round,
+      race: raceOutcome.ok
+        ? { ok: true, count: raceOutcome.data.length }
+        : { ok: false, problem: describeFailure(raceOutcome) },
+      qualifying: qualyOutcome.ok
+        ? { ok: true, count: qualyOutcome.data.length }
+        : { ok: false, problem: describeFailure(qualyOutcome) },
+    })
+  }
+
+  return NextResponse.json({
+    season: SEASON,
+    today,
+    upstreamRaces: calendar.entries.length,
+    pending: probes.length,
+    probes,
+  })
+}
 
 export async function POST() {
   const supabase = await createClient()
@@ -27,16 +117,58 @@ export async function POST() {
     })
   }
 
+  const calendar = await fetchSeasonCalendar(SEASON)
+  if (!calendar.ok) {
+    return NextResponse.json(
+      {
+        message: `Could not load the upstream season calendar: ${describeFailure(calendar)}`,
+        synced: 0,
+        checked: [],
+        today,
+      },
+      { status: 502 }
+    )
+  }
+
   let synced = 0
-  const checked: Array<{ round: number; name: string; qualyFetched: boolean; resultsFetched: boolean; apiHasResults: boolean }> = []
+  const checked: Array<{
+    round: number
+    name: string
+    upstreamRound: number | null
+    qualyFetched: boolean
+    resultsFetched: boolean
+    apiHasResults: boolean
+    problem?: string
+  }> = []
 
   for (const race of pendingRaces) {
     let qualyFetchedThisRun = false
     let apiHasResults = false
+    let problem: string | undefined
+
+    // Our round numbers do not address the same races upstream — resolve by date.
+    const entry = resolveCalendarEntry(calendar.entries, race.race_date)
+    if (!entry) {
+      checked.push({
+        round: race.round,
+        name: race.race_name,
+        upstreamRound: null,
+        qualyFetched: race.qualifying_fetched,
+        resultsFetched: false,
+        apiHasResults: false,
+        problem: NOT_IN_CALENDAR,
+      })
+      continue
+    }
 
     // Fetch qualifying results
     if (!race.qualifying_fetched) {
-      const qualyResults = await fetchQualifyingResults(2026, race.round)
+      const qualyOutcome = await fetchQualifyingResultsDetailed(
+        SEASON,
+        entry.round,
+        race.race_date
+      )
+      const qualyResults = qualyOutcome.ok ? qualyOutcome.data : null
       if (qualyResults && qualyResults.length > 0) {
         // Map F1 API driver IDs to our driver IDs
         const { data: drivers } = await supabase.from("drivers").select("id, short_name, surname")
@@ -64,8 +196,10 @@ export async function POST() {
     }
 
     // Fetch race results
-    const raceResults = await fetchRaceResults(2026, race.round)
+    const raceOutcome = await fetchRaceResultsDetailed(SEASON, entry.round, race.race_date)
+    const raceResults = raceOutcome.ok ? raceOutcome.data : null
     apiHasResults = !!(raceResults && raceResults.length > 0)
+    if (!raceOutcome.ok) problem = describeFailure(raceOutcome)
 
     if (apiHasResults && raceResults) {
       const { data: drivers } = await supabase.from("drivers").select("id, short_name, surname")
@@ -99,15 +233,26 @@ export async function POST() {
     checked.push({
       round: race.round,
       name: race.race_name,
+      upstreamRound: entry.round,
       qualyFetched: race.qualifying_fetched || qualyFetchedThisRun,
       resultsFetched: apiHasResults,
-      apiHasResults
+      apiHasResults,
+      ...(problem ? { problem } : {}),
     })
   }
 
-  const message = synced > 0 
-    ? `Synced ${synced} race(s)` 
-    : `Checked ${checked.length} race(s) but F1 API has no results yet. Results typically appear 1-2 hours after race ends.`
+  const failures = checked.filter((c) => c.problem)
+  let message: string
+  if (synced > 0) {
+    message = `Synced ${synced} race(s)`
+  } else if (failures.length > 0) {
+    // Surface the actual upstream reason instead of always blaming timing.
+    message = `Could not sync ${failures.length} race(s). ${failures
+      .map((f) => `Round ${f.round} (${f.name}): ${f.problem}`)
+      .join(" | ")}`
+  } else {
+    message = `Checked ${checked.length} race(s) but F1 API has no results yet. Results typically appear 1-2 hours after race ends.`
+  }
 
   return NextResponse.json({ message, synced, checked, today })
 }
