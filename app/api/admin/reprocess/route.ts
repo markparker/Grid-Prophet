@@ -2,8 +2,13 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getSession } from "@/lib/session"
 import { scoreRacePrediction, scorePolePrediction } from "@/lib/scoring"
+import {
+  fetchRaceResultsDetailed,
+  fetchSeasonCalendar,
+  resolveCalendarEntry,
+} from "@/lib/f1-api"
 
-const BASE_URL = "https://f1api.dev/api"
+const SEASON = 2026
 
 export async function POST(request: Request) {
   const session = await getSession()
@@ -18,14 +23,51 @@ export async function POST(request: Request) {
 
   const supabase = await createClient()
 
-  // Fetch fresh results from F1 API (bypass cache with timestamp)
-  const raceResults = await fetchFreshRaceResults(2026, round)
-  if (!raceResults || raceResults.length === 0) {
-    return NextResponse.json({ 
-      error: "No results available from F1 API for this race",
-      round 
-    }, { status: 404 })
+  // Resolve the upstream round by race date. Our round numbers are not the
+  // upstream's — reprocessing by round number previously overwrote races with
+  // a different race's results when the upstream calendar shifted.
+  const { data: race } = await supabase
+    .from("races")
+    .select("id, race_name, race_date")
+    .eq("id", raceId)
+    .single()
+
+  if (!race) {
+    return NextResponse.json({ error: "Race not found", raceId }, { status: 404 })
   }
+
+  const calendar = await fetchSeasonCalendar(SEASON)
+  if (!calendar.ok) {
+    return NextResponse.json(
+      { error: `Could not load upstream season calendar: ${calendar.detail}` },
+      { status: 502 }
+    )
+  }
+
+  const entry = resolveCalendarEntry(calendar.entries, race.race_date)
+  if (!entry) {
+    return NextResponse.json(
+      {
+        error: `"${race.race_name}" (${race.race_date}) is not in the upstream season calendar, so its results cannot be sourced from the F1 API.`,
+        round,
+      },
+      { status: 404 }
+    )
+  }
+
+  // Verifying the date guards against writing another race's results.
+  const outcome = await fetchRaceResultsDetailed(SEASON, entry.round, race.race_date)
+  if (!outcome.ok) {
+    return NextResponse.json(
+      {
+        error: `No usable results from F1 API for this race: ${outcome.detail}`,
+        round,
+        upstreamRound: entry.round,
+      },
+      { status: outcome.reason === "empty" ? 404 : 502 }
+    )
+  }
+  const raceResults = outcome.data
 
   // Get driver mapping
   const { data: drivers } = await supabase.from("drivers").select("id, short_name, surname")
@@ -57,31 +99,11 @@ export async function POST(request: Request) {
   // Mark as results fetched (in case it wasn't)
   await supabase.from("races").update({ results_fetched: true }).eq("id", raceId)
 
-  return NextResponse.json({ 
-    success: true, 
-    message: `Reprocessed race round ${round} with ${raceResults.length} results`,
+  return NextResponse.json({
+    success: true,
+    message: `Reprocessed "${race.race_name}" (our round ${round}, upstream round ${entry.round}) with ${raceResults.length} results`,
     results: raceResults.length
   })
-}
-
-async function fetchFreshRaceResults(season: number, round: number) {
-  try {
-    // Add timestamp to bypass any caching
-    const res = await fetch(`${BASE_URL}/${season}/${round}/race?_t=${Date.now()}`, {
-      cache: "no-store",
-    })
-    if (!res.ok) return null
-    const data = await res.json()
-    const results = data?.races?.results || data?.results || []
-    if (!Array.isArray(results) || results.length === 0) return null
-    return results.map((r: { driverId?: string; driver?: { driverId?: string }; position?: number | string; points?: number | string }) => ({
-      driverId: r.driverId || r.driver?.driverId || "",
-      position: Number(r.position),
-      points: Number(r.points || 0),
-    }))
-  } catch {
-    return null
-  }
 }
 
 function createDriverMap(

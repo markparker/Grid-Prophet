@@ -20,19 +20,38 @@ interface F1QualifyingResult {
 }
 
 /**
- * Result of an upstream fetch. Distinguishes the three outcomes the old
- * `T[] | null` return type collapsed into a single silent `null`:
- * transport/HTTP failure, a valid response with no results yet, and success.
+ * Result of an upstream fetch. Distinguishes the failure modes the old
+ * `T[] | null` return type collapsed into a single silent `null`.
+ *
+ * "mismatch" guards against the upstream renumbering its calendar: the round
+ * we asked for returned a different race than the one we expected.
  */
 export type F1Fetch<T> =
-  | { ok: true; data: T[] }
+  | { ok: true; data: T[]; meta: F1RaceMeta }
   | { ok: false; reason: "http"; status: number; detail: string }
   | { ok: false; reason: "network"; detail: string }
   | { ok: false; reason: "empty"; detail: string }
+  | { ok: false; reason: "mismatch"; detail: string }
+
+export interface F1RaceMeta {
+  round: number
+  date: string | null
+  raceName: string | null
+}
+
+export interface F1CalendarEntry {
+  round: number
+  raceId: string | null
+  raceName: string | null
+  /** Scheduled date of the race itself (not practice/qualifying). */
+  date: string | null
+}
 
 async function fetchJson(
   url: string
-): Promise<{ ok: true; data: unknown } | { ok: false; result: F1Fetch<never> }> {
+): Promise<
+  { ok: true; data: unknown } | { ok: false; result: Extract<F1Fetch<never>, { ok: false }> }
+> {
   let res: Response
   try {
     res = await fetch(url, { cache: "no-store" })
@@ -89,12 +108,122 @@ function describeShape(data: unknown): string {
   return `top-level keys=[${top.join(",")}]${racesDesc}`
 }
 
+function readRaceMeta(payload: unknown, requestedRound: number): F1RaceMeta {
+  const races = (payload as { races?: Record<string, unknown> })?.races
+  const obj = races && !Array.isArray(races) ? races : undefined
+  return {
+    round: requestedRound,
+    date: typeof obj?.date === "string" ? obj.date : null,
+    raceName: typeof obj?.raceName === "string" ? obj.raceName : null,
+  }
+}
+
+/**
+ * The upstream's own calendar for a season, keyed by its round numbers.
+ *
+ * These round numbers are the upstream's, and they do NOT necessarily match
+ * ours — the feed has been observed to add or drop races mid-season, which
+ * shifts every later round. Always resolve a race by identity (date) rather
+ * than assuming our round number addresses the same race upstream.
+ */
+export async function fetchSeasonCalendar(
+  season: number
+): Promise<
+  { ok: true; entries: F1CalendarEntry[] } | Extract<F1Fetch<never>, { ok: false }>
+> {
+  const fetched = await fetchJson(`${BASE_URL}/${season}`)
+  if (!fetched.ok) return fetched.result
+
+  const races = (fetched.data as { races?: unknown })?.races
+  if (!Array.isArray(races) || races.length === 0) {
+    return {
+      ok: false,
+      reason: "empty",
+      detail: `no races in season calendar (${describeShape(fetched.data)})`,
+    }
+  }
+
+  const entries = races.map((r) => {
+    const entry = r as {
+      round?: number | string
+      raceId?: string
+      raceName?: string
+      schedule?: { race?: { date?: string } }
+    }
+    return {
+      round: Number(entry.round),
+      raceId: entry.raceId ?? null,
+      raceName: entry.raceName ?? null,
+      date: entry.schedule?.race?.date ?? null,
+    }
+  })
+
+  return { ok: true, entries }
+}
+
+/**
+ * How far our recorded race date may differ from the upstream's and still be
+ * the same race. The two feeds disagree by a day on races that straddle
+ * midnight UTC (Las Vegas, Azerbaijan). Consecutive races are at least 7 days
+ * apart, so this window can only ever match one entry.
+ */
+export const MAX_DATE_DRIFT_DAYS = 3
+
+function daysApart(a: string, b: string): number | null {
+  const ms = Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)
+  if (Number.isNaN(ms)) return null
+  return Math.abs(ms) / 86_400_000
+}
+
+/**
+ * Finds the upstream calendar entry for one of our races, matching on date
+ * rather than round number. Returns null when the upstream calendar has no
+ * corresponding race at all, which is a real condition: the feed's 2026
+ * calendar omits two races that we list.
+ */
+export function resolveCalendarEntry(
+  entries: F1CalendarEntry[],
+  raceDate: string | null
+): F1CalendarEntry | null {
+  if (!raceDate) return null
+
+  let best: F1CalendarEntry | null = null
+  let bestDrift = Number.POSITIVE_INFINITY
+  for (const entry of entries) {
+    if (!entry.date) continue
+    const drift = daysApart(entry.date, raceDate)
+    if (drift === null || drift > MAX_DATE_DRIFT_DAYS) continue
+    if (drift < bestDrift) {
+      best = entry
+      bestDrift = drift
+    }
+  }
+  return best
+}
+
+/**
+ * Rejects a payload describing a different race than the one requested.
+ * Without this check a renumbered upstream calendar silently writes one
+ * race's results onto another race.
+ */
+function checkIdentity(meta: F1RaceMeta, expectDate: string | undefined): string | null {
+  if (!expectDate || !meta.date) return null
+  const drift = daysApart(meta.date, expectDate)
+  if (drift !== null && drift <= MAX_DATE_DRIFT_DAYS) return null
+  return `upstream round ${meta.round} is "${meta.raceName ?? "unknown"}" dated ${meta.date}, but ${expectDate} was expected — the upstream calendar has shifted`
+}
+
 export async function fetchRaceResultsDetailed(
   season: number,
-  round: number
+  round: number,
+  expectDate?: string
 ): Promise<F1Fetch<F1RaceResult>> {
   const fetched = await fetchJson(`${BASE_URL}/${season}/${round}/race`)
   if (!fetched.ok) return fetched.result
+
+  const meta = readRaceMeta(fetched.data, round)
+  const mismatch = checkIdentity(meta, expectDate)
+  if (mismatch) return { ok: false, reason: "mismatch", detail: mismatch }
 
   const data = fetched.data as { races?: { results?: unknown }; results?: unknown }
   const results = data?.races?.results ?? data?.results ?? []
@@ -108,6 +237,7 @@ export async function fetchRaceResultsDetailed(
 
   return {
     ok: true,
+    meta,
     data: (results as F1ApiResponse[]).map((r) => ({
       driverId: r.driverId || r.driver?.driverId || "",
       position: Number(r.position),
@@ -118,10 +248,17 @@ export async function fetchRaceResultsDetailed(
 
 export async function fetchQualifyingResultsDetailed(
   season: number,
-  round: number
+  round: number,
+  expectDate?: string
 ): Promise<F1Fetch<F1QualifyingResult>> {
   const fetched = await fetchJson(`${BASE_URL}/${season}/${round}/qualy`)
   if (!fetched.ok) return fetched.result
+
+  const meta = readRaceMeta(fetched.data, round)
+  // The qualifying payload is dated to the race weekend's race day, so the
+  // same identity check applies.
+  const mismatch = checkIdentity(meta, expectDate)
+  if (mismatch) return { ok: false, reason: "mismatch", detail: mismatch }
 
   const data = fetched.data as {
     races?: { qualyResults?: unknown; qualifyingResults?: unknown }
@@ -139,27 +276,12 @@ export async function fetchQualifyingResultsDetailed(
 
   return {
     ok: true,
+    meta,
     data: (results as F1ApiResponse[]).map((r) => ({
       driverId: r.driverId || r.driver?.driverId || "",
       gridPosition: Number(r.position || r.gridPosition || 0),
     })),
   }
-}
-
-export async function fetchRaceResults(
-  season: number,
-  round: number
-): Promise<F1RaceResult[] | null> {
-  const outcome = await fetchRaceResultsDetailed(season, round)
-  return outcome.ok ? outcome.data : null
-}
-
-export async function fetchQualifyingResults(
-  season: number,
-  round: number
-): Promise<F1QualifyingResult[] | null> {
-  const outcome = await fetchQualifyingResultsDetailed(season, round)
-  return outcome.ok ? outcome.data : null
 }
 
 export async function fetchDriverStandings(

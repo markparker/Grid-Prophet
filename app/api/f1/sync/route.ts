@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server"
 import {
   fetchRaceResultsDetailed,
   fetchQualifyingResultsDetailed,
+  fetchSeasonCalendar,
+  resolveCalendarEntry,
   type F1Fetch,
 } from "@/lib/f1-api"
 import {
@@ -21,8 +23,13 @@ function describeFailure(outcome: Extract<F1Fetch<unknown>, { ok: false }>): str
       return `upstream unreachable — ${outcome.detail}`
     case "empty":
       return `upstream returned no data — ${outcome.detail}`
+    case "mismatch":
+      return `wrong race returned — ${outcome.detail}`
   }
 }
+
+const NOT_IN_CALENDAR =
+  "not present in the upstream season calendar — this race is missing from the feed, so results cannot be sourced from it"
 
 /**
  * Dry-run probe. Reports exactly what the upstream F1 API returns for every
@@ -40,16 +47,37 @@ export async function GET() {
     .eq("results_fetched", false)
     .order("round", { ascending: true })
 
+  const calendar = await fetchSeasonCalendar(SEASON)
+  if (!calendar.ok) {
+    return NextResponse.json(
+      { season: SEASON, today, error: `calendar unavailable: ${describeFailure(calendar)}` },
+      { status: 502 }
+    )
+  }
+
   const probes = []
   for (const race of pendingRaces || []) {
+    const entry = resolveCalendarEntry(calendar.entries, race.race_date)
+    if (!entry) {
+      probes.push({
+        round: race.round,
+        name: race.race_name,
+        raceDate: race.race_date,
+        upstreamRound: null,
+        problem: NOT_IN_CALENDAR,
+      })
+      continue
+    }
+
     const [raceOutcome, qualyOutcome] = await Promise.all([
-      fetchRaceResultsDetailed(SEASON, race.round),
-      fetchQualifyingResultsDetailed(SEASON, race.round),
+      fetchRaceResultsDetailed(SEASON, entry.round, race.race_date),
+      fetchQualifyingResultsDetailed(SEASON, entry.round, race.race_date),
     ])
     probes.push({
       round: race.round,
       name: race.race_name,
       raceDate: race.race_date,
+      upstreamRound: entry.round,
       race: raceOutcome.ok
         ? { ok: true, count: raceOutcome.data.length }
         : { ok: false, problem: describeFailure(raceOutcome) },
@@ -59,7 +87,13 @@ export async function GET() {
     })
   }
 
-  return NextResponse.json({ season: SEASON, today, pending: probes.length, probes })
+  return NextResponse.json({
+    season: SEASON,
+    today,
+    upstreamRaces: calendar.entries.length,
+    pending: probes.length,
+    probes,
+  })
 }
 
 export async function POST() {
@@ -83,10 +117,24 @@ export async function POST() {
     })
   }
 
+  const calendar = await fetchSeasonCalendar(SEASON)
+  if (!calendar.ok) {
+    return NextResponse.json(
+      {
+        message: `Could not load the upstream season calendar: ${describeFailure(calendar)}`,
+        synced: 0,
+        checked: [],
+        today,
+      },
+      { status: 502 }
+    )
+  }
+
   let synced = 0
   const checked: Array<{
     round: number
     name: string
+    upstreamRound: number | null
     qualyFetched: boolean
     resultsFetched: boolean
     apiHasResults: boolean
@@ -98,9 +146,28 @@ export async function POST() {
     let apiHasResults = false
     let problem: string | undefined
 
+    // Our round numbers do not address the same races upstream — resolve by date.
+    const entry = resolveCalendarEntry(calendar.entries, race.race_date)
+    if (!entry) {
+      checked.push({
+        round: race.round,
+        name: race.race_name,
+        upstreamRound: null,
+        qualyFetched: race.qualifying_fetched,
+        resultsFetched: false,
+        apiHasResults: false,
+        problem: NOT_IN_CALENDAR,
+      })
+      continue
+    }
+
     // Fetch qualifying results
     if (!race.qualifying_fetched) {
-      const qualyOutcome = await fetchQualifyingResultsDetailed(SEASON, race.round)
+      const qualyOutcome = await fetchQualifyingResultsDetailed(
+        SEASON,
+        entry.round,
+        race.race_date
+      )
       const qualyResults = qualyOutcome.ok ? qualyOutcome.data : null
       if (qualyResults && qualyResults.length > 0) {
         // Map F1 API driver IDs to our driver IDs
@@ -129,7 +196,7 @@ export async function POST() {
     }
 
     // Fetch race results
-    const raceOutcome = await fetchRaceResultsDetailed(SEASON, race.round)
+    const raceOutcome = await fetchRaceResultsDetailed(SEASON, entry.round, race.race_date)
     const raceResults = raceOutcome.ok ? raceOutcome.data : null
     apiHasResults = !!(raceResults && raceResults.length > 0)
     if (!raceOutcome.ok) problem = describeFailure(raceOutcome)
@@ -166,6 +233,7 @@ export async function POST() {
     checked.push({
       round: race.round,
       name: race.race_name,
+      upstreamRound: entry.round,
       qualyFetched: race.qualifying_fetched || qualyFetchedThisRun,
       resultsFetched: apiHasResults,
       apiHasResults,
