@@ -25,7 +25,7 @@ export async function fetchRaceResults(
 ): Promise<F1RaceResult[] | null> {
   try {
     const res = await fetch(`${BASE_URL}/${season}/${round}/race`, {
-      next: { revalidate: 3600 },
+      cache: "no-store",
     })
     if (!res.ok) return null
     const data = await res.json()
@@ -47,7 +47,7 @@ export async function fetchQualifyingResults(
 ): Promise<F1QualifyingResult[] | null> {
   try {
     const res = await fetch(`${BASE_URL}/${season}/${round}/qualy`, {
-      next: { revalidate: 3600 },
+      cache: "no-store",
     })
     if (!res.ok) return null
     const data = await res.json()
