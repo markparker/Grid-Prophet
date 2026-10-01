@@ -11,10 +11,13 @@ export default async function RacesPage() {
 
   // Fetch races and predictions in parallel
   const [{ data: races, error: racesError }, { data: predictions }] = await Promise.all([
+    // Ordered by date, not by round: a rescheduled race keeps its original
+    // round number, so ordering by round would list it in the wrong place
+    // (the 2026 Bahrain GP moved from April to October).
     supabase
       .from("races")
       .select("*")
-      .order("round", { ascending: true }),
+      .order("race_date", { ascending: true }),
     supabase
       .from("race_predictions")
       .select("race_id")
@@ -32,6 +35,9 @@ export default async function RacesPage() {
 
   const now = new Date()
 
+  // Counted rather than hardcoded — races do get canceled mid-season.
+  const scheduledCount = (races || []).filter((r) => r.status !== "canceled").length
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -39,7 +45,7 @@ export default async function RacesPage() {
           2026 Race Calendar
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          24 races across the season. Make your predictions before qualifying.
+          {scheduledCount} races across the season. Make your predictions before qualifying.
         </p>
       </div>
 
