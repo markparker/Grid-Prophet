@@ -6,6 +6,7 @@ import {
   fetchSeasonCalendar,
   resolveCalendarEntry,
   type F1Fetch,
+  type F1CalendarEntry,
 } from "@/lib/f1-api"
 import {
   scoreRacePrediction,
@@ -31,21 +32,108 @@ function describeFailure(outcome: Extract<F1Fetch<unknown>, { ok: false }>): str
 const NOT_IN_CALENDAR =
   "not present in the upstream season calendar — this race is missing from the feed, so results cannot be sourced from it"
 
+interface StoredRace {
+  round: number
+  race_name: string
+  race_date: string
+  status: string
+}
+
+/**
+ * Compares our stored calendar against the upstream one. Our schedule is a
+ * snapshot, and real calendars move: the 2026 Bahrain GP was postponed from
+ * April and rerun in Malaysia in October, which left our row pointing at a
+ * date six months stale and flagged canceled, so the race vanished from the
+ * app. Nothing reported here is applied automatically — a schedule is not
+ * worth rewriting from a feed unattended — but drift stops being invisible.
+ */
+function scheduleDrift(stored: StoredRace[], entries: F1CalendarEntry[]) {
+  const drift: Array<{
+    round: number | null
+    name: string
+    issue: string
+    ours: string | null
+    upstream: string | null
+  }> = []
+
+  const matched = new Set<number>()
+  for (const race of stored) {
+    const entry = resolveCalendarEntry(entries, race.race_date)
+    if (entry) {
+      matched.add(entry.round)
+      if (entry.date && entry.date !== race.race_date) {
+        drift.push({
+          round: race.round,
+          name: race.race_name,
+          issue: "race date differs from upstream",
+          ours: race.race_date,
+          upstream: entry.date,
+        })
+      }
+      if (race.status === "canceled") {
+        drift.push({
+          round: race.round,
+          name: race.race_name,
+          issue: "marked canceled here but present in the upstream calendar",
+          ours: race.race_date,
+          upstream: entry.date,
+        })
+      }
+      continue
+    }
+
+    // No upstream race within the matching window. Genuinely canceled races
+    // are expected to be absent, so only flag ones we still show as scheduled.
+    if (race.status !== "canceled") {
+      drift.push({
+        round: race.round,
+        name: race.race_name,
+        issue: "scheduled here but absent from the upstream calendar",
+        ours: race.race_date,
+        upstream: null,
+      })
+    }
+  }
+
+  // Upstream races we have no row for at all, including ones that reappeared
+  // on a new date after being postponed.
+  for (const entry of entries) {
+    if (matched.has(entry.round)) continue
+    drift.push({
+      round: null,
+      name: entry.raceName ?? entry.raceId ?? `upstream round ${entry.round}`,
+      issue: "in the upstream calendar but missing from our schedule",
+      ours: null,
+      upstream: entry.date,
+    })
+  }
+
+  return drift
+}
+
 /**
  * Dry-run probe. Reports exactly what the upstream F1 API returns for every
- * race that is due a sync, without writing anything. Use this to tell
- * "results aren't published yet" apart from "the feed is broken".
+ * race that is due a sync, plus any drift between our calendar and the
+ * upstream one, without writing anything. Use this to tell "results aren't
+ * published yet" apart from "the feed is broken" apart from "our schedule
+ * is out of date".
  */
 export async function GET() {
   const supabase = await createClient()
   const today = new Date().toISOString().split("T")[0]
 
-  const { data: pendingRaces } = await supabase
-    .from("races")
-    .select("*")
-    .lte("race_date", today)
-    .eq("results_fetched", false)
-    .order("round", { ascending: true })
+  const [{ data: pendingRaces }, { data: allRaces }] = await Promise.all([
+    supabase
+      .from("races")
+      .select("*")
+      .lte("race_date", today)
+      .eq("results_fetched", false)
+      .order("round", { ascending: true }),
+    supabase
+      .from("races")
+      .select("round, race_name, race_date, status")
+      .order("race_date", { ascending: true }),
+  ])
 
   const calendar = await fetchSeasonCalendar(SEASON)
   if (!calendar.ok) {
@@ -54,6 +142,8 @@ export async function GET() {
       { status: 502 }
     )
   }
+
+  const drift = scheduleDrift((allRaces as StoredRace[]) || [], calendar.entries)
 
   const probes = []
   for (const race of pendingRaces || []) {
@@ -91,6 +181,7 @@ export async function GET() {
     season: SEASON,
     today,
     upstreamRaces: calendar.entries.length,
+    scheduleDrift: drift,
     pending: probes.length,
     probes,
   })
@@ -174,6 +265,10 @@ export async function POST() {
         const { data: drivers } = await supabase.from("drivers").select("id, short_name, surname")
         const driverMap = createDriverMap(drivers || [])
 
+        // Clear first: upserting alone would leave behind rows for drivers that
+        // are not in the incoming set, so any stale classification would survive.
+        await supabase.from("qualifying_results").delete().eq("race_id", race.id)
+
         for (const qr of qualyResults) {
           const driverId = driverMap.get(qr.driverId.toLowerCase()) || qr.driverId
           await supabase
@@ -204,6 +299,9 @@ export async function POST() {
     if (apiHasResults && raceResults) {
       const { data: drivers } = await supabase.from("drivers").select("id, short_name, surname")
       const driverMap = createDriverMap(drivers || [])
+
+      // Clear first, for the same reason as qualifying above.
+      await supabase.from("race_results").delete().eq("race_id", race.id)
 
       for (const rr of raceResults) {
         const driverId = driverMap.get(rr.driverId.toLowerCase()) || rr.driverId
