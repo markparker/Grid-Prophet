@@ -20,15 +20,22 @@ export async function POST(request: Request) {
       .single()
 
     if (player && player.group_id) {
-      // Update last_login and login_method
-      await supabase
+      // Update last_login and login_method. Sign-in should still succeed if
+      // this fails, but it must not fail silently: a check constraint rejected
+      // every one of these writes for months, and the discarded error meant
+      // nobody noticed last_login was never being recorded.
+      const { error: touchError } = await supabase
         .from("players")
-        .update({ 
+        .update({
           last_login: new Date().toISOString(),
           login_method: 'clerk',
           avatar_url: avatarUrl || player.avatar_url,
         })
         .eq("id", player.id)
+
+      if (touchError) {
+        console.error("[auth] failed to record sign-in for", player.id, touchError.message)
+      }
 
       // Set session for existing user
       await setSession({
