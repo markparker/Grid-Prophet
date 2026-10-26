@@ -98,25 +98,75 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid invite code. No league found." }, { status: 404 })
     }
 
-    // Check if player already exists
-    const { data: existingPlayer } = await supabase
+    // Identity is decided by the signed-in account, not by the typed name.
+    // Matching on name alone meant anyone holding the invite code could type an
+    // existing member's name and be handed that member's session, predictions
+    // and score.
+    const normalize = (value?: string | null) => (value ?? "").trim().toLowerCase()
+    const signedInEmail = normalize(email)
+
+    const { data: members } = await supabase
       .from("players")
       .select()
       .eq("group_id", group.id)
-      .eq("name", playerName)
-      .single()
 
-    if (existingPlayer) {
+    const roster = members || []
+
+    // Already a member under this account: sign straight back in, whatever name
+    // was typed. Without this, players whose row predates Clerk never get their
+    // email attached and have to re-enter the invite code on every visit.
+    const byEmail = signedInEmail
+      ? roster.find((m) => normalize(m.email) === signedInEmail)
+      : undefined
+
+    if (byEmail) {
       await setSession({
-        playerId: existingPlayer.id,
+        playerId: byEmail.id,
         groupId: group.id,
-        playerName: existingPlayer.name,
+        playerName: byEmail.name,
         groupName: group.name,
-        avatarUrl: existingPlayer.avatar_url || "",
-        email: existingPlayer.email || "",
-        googleLinked: false,
+        avatarUrl: avatarUrl || byEmail.avatar_url || "",
+        email: byEmail.email || "",
+        googleLinked: !!byEmail.google_id,
       })
-      return NextResponse.json({ group, player: existingPlayer })
+      return NextResponse.json({ group, player: byEmail })
+    }
+
+    const byName = roster.find((m) => normalize(m.name) === normalize(playerName))
+
+    if (byName) {
+      // Claimed by someone else's account — refuse rather than hand over the session.
+      if (normalize(byName.email) && normalize(byName.email) !== signedInEmail) {
+        return NextResponse.json(
+          { error: "That name is already taken in this league. Please choose a different one." },
+          { status: 409 }
+        )
+      }
+
+      // An unclaimed slot from before sign-in existed: attach this account to it.
+      const { data: claimed } = await supabase
+        .from("players")
+        .update({
+          email: email || byName.email,
+          avatar_url: avatarUrl || byName.avatar_url,
+          login_method: 'clerk',
+          last_login: new Date().toISOString(),
+        })
+        .eq("id", byName.id)
+        .select()
+        .single()
+
+      const player = claimed || byName
+      await setSession({
+        playerId: player.id,
+        groupId: group.id,
+        playerName: player.name,
+        groupName: group.name,
+        avatarUrl: player.avatar_url || "",
+        email: player.email || "",
+        googleLinked: !!player.google_id,
+      })
+      return NextResponse.json({ group, player })
     }
 
     const joinInsert: Record<string, string | boolean> = { group_id: group.id, name: playerName, last_login: new Date().toISOString(), login_method: 'clerk' }
