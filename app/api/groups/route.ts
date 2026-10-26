@@ -41,6 +41,11 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (playerError) {
+      // The group row was already inserted above. Without this the failed
+      // attempt leaves an empty group behind, and retrying makes another one —
+      // a broken sign-up left nine orphaned groups before this was fixed.
+      await supabase.from("groups").delete().eq("id", group.id)
+      console.error("[league] player insert failed, rolled back group:", playerError.message)
       return NextResponse.json({ error: playerError.message }, { status: 500 })
     }
 
