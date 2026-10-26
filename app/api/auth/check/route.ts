@@ -12,12 +12,18 @@ export async function POST(request: Request) {
 
     const supabase = await createClient()
 
-    // Check if user exists in database by email
+    // Check if user exists in database by email.
+    // Not .single(): nothing stops one account having a player row in more than
+    // one league, and .single() turns that into an error that silently sends
+    // the user back to the join page on every sign-in. Take the most recent.
     const { data: player } = await supabase
       .from("players")
       .select("*, groups(name)")
       .eq("email", email)
-      .single()
+      .order("last_login", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
     if (player && player.group_id) {
       // Update last_login and login_method. Sign-in should still succeed if
