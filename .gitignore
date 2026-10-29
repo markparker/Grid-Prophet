@@ -12,3 +12,6 @@ node_modules/
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+# Local env files
+.env
