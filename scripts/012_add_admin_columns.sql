@@ -2,9 +2,11 @@
 ALTER TABLE players ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
 ALTER TABLE players ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ;
 
--- Set Mark Parker as admin (based on Google ID from auth callback)
--- You can update this with your actual player ID
-UPDATE players SET is_admin = true WHERE email = 'mark@gridprophets.com';
+-- Promote the owner's account to admin.
+-- Replace the placeholder before running; the address is deliberately not
+-- committed, so the repository does not advertise which account is the admin.
+-- See 013_set_admin_user.sql, which supersedes this and also demotes everyone else.
 
--- Also try matching by name if email doesn't match
-UPDATE players SET is_admin = true WHERE name ILIKE '%mark%parker%' AND is_admin = false;
+\set admin_email 'admin@example.com'
+
+UPDATE players SET is_admin = true WHERE email = :'admin_email';
