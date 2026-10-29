@@ -54,6 +54,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=   # Supabase anonymous/public key
 # Resend (required for email features; build fails without it)
 RESEND_API_KEY=                  # Resend API key for transactional emails
 
+# Session signing (required — sign-in fails without it)
+SESSION_SECRET=                  # >= 32 chars; signs the session cookie (lib/session.ts).
+                                 # Generate with: openssl rand -base64 32
+                                 # Changing it invalidates every active session.
+
 # App URL (optional — defaults to https://gridprophets.com)
 NEXT_PUBLIC_APP_URL=             # Override for local dev, e.g. http://localhost:3000
 ```
