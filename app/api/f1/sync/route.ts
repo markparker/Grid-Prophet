@@ -37,7 +37,11 @@ interface StoredRace {
   race_name: string
   race_date: string
   status: string
+  qualifying_date: string | null
 }
+
+/** Our qualifying time may differ from the feed's by this much before it is reported. */
+const QUALIFYING_DRIFT_TOLERANCE_MINUTES = 15
 
 /**
  * Compares our stored calendar against the upstream one. Our schedule is a
@@ -77,6 +81,37 @@ function scheduleDrift(stored: StoredRace[], entries: F1CalendarEntry[]) {
           issue: "marked canceled here but present in the upstream calendar",
           ours: race.race_date,
           upstream: entry.date,
+        })
+      }
+
+      // Predictions lock at qualifying, so a wrong time here is not cosmetic:
+      // the 2026 Mexico GP was seeded three hours early and locked the league
+      // out before qualifying had started.
+      if (entry.qualifyingStart && race.qualifying_date) {
+        const ours = new Date(race.qualifying_date).getTime()
+        const theirs = new Date(entry.qualifyingStart).getTime()
+        if (!Number.isNaN(ours) && !Number.isNaN(theirs)) {
+          const minutesOff = Math.round((theirs - ours) / 60000)
+          if (Math.abs(minutesOff) > QUALIFYING_DRIFT_TOLERANCE_MINUTES) {
+            drift.push({
+              round: race.round,
+              name: race.race_name,
+              issue:
+                minutesOff > 0
+                  ? `predictions lock ${(minutesOff / 60).toFixed(1)}h BEFORE qualifying starts`
+                  : `predictions lock ${(-minutesOff / 60).toFixed(1)}h AFTER qualifying starts`,
+              ours: race.qualifying_date,
+              upstream: entry.qualifyingStart,
+            })
+          }
+        }
+      } else if (!race.qualifying_date && entry.qualifyingStart) {
+        drift.push({
+          round: race.round,
+          name: race.race_name,
+          issue: "no qualifying time stored, so predictions lock at midnight UTC on race day",
+          ours: null,
+          upstream: entry.qualifyingStart,
         })
       }
       continue
@@ -131,7 +166,7 @@ export async function GET() {
       .order("round", { ascending: true }),
     supabase
       .from("races")
-      .select("round, race_name, race_date, status")
+      .select("round, race_name, race_date, status, qualifying_date")
       .order("race_date", { ascending: true }),
   ])
 
