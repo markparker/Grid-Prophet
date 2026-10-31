@@ -45,6 +45,12 @@ export interface F1CalendarEntry {
   raceName: string | null
   /** Scheduled date of the race itself (not practice/qualifying). */
   date: string | null
+  /**
+   * Start of qualifying as an ISO instant, or null when the feed has not
+   * published a time yet. Predictions lock on this, so an inaccurate value
+   * locks the league out early or lets people predict pole after seeing it.
+   */
+  qualifyingStart: string | null
 }
 
 async function fetchJson(
@@ -148,13 +154,29 @@ export async function fetchSeasonCalendar(
       round?: number | string
       raceId?: string
       raceName?: string
-      schedule?: { race?: { date?: string } }
+      schedule?: {
+        race?: { date?: string }
+        qualy?: { date?: string; time?: string }
+      }
     }
+
+    // The feed splits qualifying into date and time, and publishes the time
+    // only once the weekend's schedule is firm. Without a time there is no
+    // usable instant, so report null rather than inventing midnight.
+    const qualyDate = entry.schedule?.qualy?.date
+    const qualyTime = entry.schedule?.qualy?.time
+    let qualifyingStart: string | null = null
+    if (qualyDate && qualyTime) {
+      const parsed = new Date(`${qualyDate}T${qualyTime}`)
+      if (!Number.isNaN(parsed.getTime())) qualifyingStart = parsed.toISOString()
+    }
+
     return {
       round: Number(entry.round),
       raceId: entry.raceId ?? null,
       raceName: entry.raceName ?? null,
       date: entry.schedule?.race?.date ?? null,
+      qualifyingStart,
     }
   })
 
