@@ -13,10 +13,10 @@ export const metadata: Metadata = {
   title: "Grid Prophet - F1 2026 Prediction League",
   description:
     "Predict F1 2026 race results, pole positions, and the World Drivers' Championship with your friends.",
-  icons: {
-    icon: "/favicon.png",
-    apple: "/favicon.png",
-  },
+  // No `icons` block on purpose: it would override the App Router file
+  // convention. app/icon.svg and app/apple-icon.png are picked up and
+  // fingerprinted automatically. This previously pointed at /favicon.png,
+  // a 1.05 MB image served on every page load.
 }
 
 export const viewport: Viewport = {

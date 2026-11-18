@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 32 32" role="img" aria-label="Grid Prophets">
+  <!-- Standalone mark. Same geometry as app/icon.svg, no text, so it is safe
+       anywhere a font cannot be guaranteed: README, social card, app store. -->
+  <rect x="0.5" y="0.5" width="31" height="31" rx="7" fill="#0e0f12" stroke="#262a33" />
+  <g transform="skewX(-18)">
+    <rect x="12"   y="8"    width="16" height="4.2" rx="2.1" fill="#fd122e" />
+    <rect x="10.5" y="14.1" width="12" height="4.2" rx="2.1" fill="#f2f2f2" />
+    <rect x="9"    y="20.2" width="8"  height="4.2" rx="2.1" fill="#f2f2f2" opacity="0.5" />
+  </g>
+</svg>

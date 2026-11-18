@@ -1,12 +1,4 @@
-const BASE_URL = "https://f1api.dev/api"
-
-interface F1ApiResponse {
-  driverId?: string
-  driver?: { driverId?: string }
-  position?: number | string
-  points?: number | string
-  gridPosition?: number | string
-}
+const BASE_URL = "https://api.openf1.org/v1"
 
 interface F1RaceResult {
   driverId: string
@@ -20,11 +12,11 @@ interface F1QualifyingResult {
 }
 
 /**
- * Result of an upstream fetch. Distinguishes the failure modes the old
- * `T[] | null` return type collapsed into a single silent `null`.
+ * Result of an upstream fetch. Distinguishes the failure modes a bare
+ * `T[] | null` collapsed into a single silent null.
  *
- * "mismatch" guards against the upstream renumbering its calendar: the round
- * we asked for returned a different race than the one we expected.
+ * "mismatch" guards against addressing the wrong session: the resolved
+ * session's date must match the race we asked for.
  */
 export type F1Fetch<T> =
   | { ok: true; data: T[]; meta: F1RaceMeta }
@@ -34,23 +26,64 @@ export type F1Fetch<T> =
   | { ok: false; reason: "mismatch"; detail: string }
 
 export interface F1RaceMeta {
-  round: number
+  sessionKey: number
   date: string | null
   raceName: string | null
 }
 
 export interface F1CalendarEntry {
-  round: number
-  raceId: string | null
+  /** OpenF1 session_key of the race. This is the handle for everything else. */
+  raceSessionKey: number
+  /** Qualifying session for the same meeting, when OpenF1 has one. */
+  qualifyingSessionKey: number | null
+  meetingKey: number
   raceName: string | null
-  /** Scheduled date of the race itself (not practice/qualifying). */
+  raceId: string | null
+  /** Date of the race session, YYYY-MM-DD. */
   date: string | null
-  /**
-   * Start of qualifying as an ISO instant, or null when the feed has not
-   * published a time yet. Predictions lock on this, so an inaccurate value
-   * locks the league out early or lets people predict pole after seeing it.
-   */
+  /** Start of qualifying as an ISO instant. Predictions lock on this. */
   qualifyingStart: string | null
+  cancelled: boolean
+}
+
+/** Championship points are only awarded for a Race, never a Sprint or Qualifying. */
+interface OpenF1SessionRow {
+  session_key: number
+  meeting_key: number
+  session_name: string
+  session_type: string
+  date_start: string
+  country_name?: string
+  circuit_short_name?: string
+  is_cancelled?: boolean
+}
+
+interface OpenF1ResultRow {
+  position: number | null
+  driver_number: number
+  points?: number | null
+  dnf?: boolean
+  dns?: boolean
+  dsq?: boolean
+  number_of_laps?: number | null
+}
+
+interface OpenF1DriverRow {
+  driver_number: number
+  name_acronym?: string
+  full_name?: string
+  first_name?: string
+  last_name?: string
+  team_name?: string
+}
+
+/** A driver as OpenF1 described them for one session. */
+export interface F1SessionDriver {
+  driverNumber: number
+  acronym: string
+  firstName: string | null
+  lastName: string | null
+  teamName: string | null
 }
 
 async function fetchJson(
@@ -73,7 +106,6 @@ async function fetchJson(
   }
 
   if (!res.ok) {
-    // Include a short body preview — upstream error payloads usually explain why.
     const body = await res.text().catch(() => "")
     return {
       ok: false,
@@ -100,94 +132,66 @@ async function fetchJson(
   }
 }
 
-/** Describes the top-level keys of an unexpected payload, to make shape drift diagnosable. */
-function describeShape(data: unknown): string {
-  if (data === null || typeof data !== "object") return `payload was ${typeof data}`
-  const top = Object.keys(data as Record<string, unknown>)
-  const races = (data as { races?: unknown }).races
-  let racesDesc = ""
-  if (Array.isArray(races)) {
-    racesDesc = `; races=array(${races.length})`
-  } else if (races && typeof races === "object") {
-    racesDesc = `; races keys=[${Object.keys(races as Record<string, unknown>).join(",")}]`
-  }
-  return `top-level keys=[${top.join(",")}]${racesDesc}`
-}
-
-function readRaceMeta(payload: unknown, requestedRound: number): F1RaceMeta {
-  const races = (payload as { races?: Record<string, unknown> })?.races
-  const obj = races && !Array.isArray(races) ? races : undefined
-  return {
-    round: requestedRound,
-    date: typeof obj?.date === "string" ? obj.date : null,
-    raceName: typeof obj?.raceName === "string" ? obj.raceName : null,
-  }
-}
-
 /**
- * The upstream's own calendar for a season, keyed by its round numbers.
+ * The season calendar, built from OpenF1's session list.
  *
- * These round numbers are the upstream's, and they do NOT necessarily match
- * ours — the feed has been observed to add or drop races mid-season, which
- * shifts every later round. Always resolve a race by identity (date) rather
- * than assuming our round number addresses the same race upstream.
+ * OpenF1 has no concept of a championship round, and ours would not match it
+ * anyway, so races are addressed by session_key and matched to our rows by
+ * date. One request covers the whole year.
  */
 export async function fetchSeasonCalendar(
   season: number
-): Promise<
-  { ok: true; entries: F1CalendarEntry[] } | Extract<F1Fetch<never>, { ok: false }>
-> {
-  const fetched = await fetchJson(`${BASE_URL}/${season}`)
+): Promise<{ ok: true; entries: F1CalendarEntry[] } | Extract<F1Fetch<never>, { ok: false }>> {
+  const fetched = await fetchJson(`${BASE_URL}/sessions?year=${season}`)
   if (!fetched.ok) return fetched.result
 
-  const races = (fetched.data as { races?: unknown })?.races
-  if (!Array.isArray(races) || races.length === 0) {
-    return {
-      ok: false,
-      reason: "empty",
-      detail: `no races in season calendar (${describeShape(fetched.data)})`,
-    }
+  const rows = fetched.data
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { ok: false, reason: "empty", detail: `no sessions returned for ${season}` }
   }
 
-  const entries = races.map((r) => {
-    const entry = r as {
-      round?: number | string
-      raceId?: string
-      raceName?: string
-      schedule?: {
-        race?: { date?: string }
-        qualy?: { date?: string; time?: string }
-      }
-    }
+  const sessions = rows as OpenF1SessionRow[]
+  const byMeeting = new Map<number, { race?: OpenF1SessionRow; qualifying?: OpenF1SessionRow }>()
 
-    // The feed splits qualifying into date and time, and publishes the time
-    // only once the weekend's schedule is firm. Without a time there is no
-    // usable instant, so report null rather than inventing midnight.
-    const qualyDate = entry.schedule?.qualy?.date
-    const qualyTime = entry.schedule?.qualy?.time
-    let qualifyingStart: string | null = null
-    if (qualyDate && qualyTime) {
-      const parsed = new Date(`${qualyDate}T${qualyTime}`)
-      if (!Number.isNaN(parsed.getTime())) qualifyingStart = parsed.toISOString()
-    }
+  for (const s of sessions) {
+    if (s.session_type !== "Race" && s.session_name !== "Qualifying") continue
+    const slot = byMeeting.get(s.meeting_key) ?? {}
+    // session_type "Race" also covers the Sprint, which awards different points
+    // and is not what we score, so match the main race by name.
+    if (s.session_name === "Race") slot.race = s
+    if (s.session_name === "Qualifying") slot.qualifying = s
+    byMeeting.set(s.meeting_key, slot)
+  }
 
-    return {
-      round: Number(entry.round),
-      raceId: entry.raceId ?? null,
-      raceName: entry.raceName ?? null,
-      date: entry.schedule?.race?.date ?? null,
-      qualifyingStart,
-    }
-  })
+  const entries: F1CalendarEntry[] = []
+  for (const [meetingKey, slot] of byMeeting) {
+    if (!slot.race) continue
+    entries.push({
+      raceSessionKey: slot.race.session_key,
+      qualifyingSessionKey: slot.qualifying?.session_key ?? null,
+      meetingKey,
+      raceName: slot.race.country_name ?? slot.race.circuit_short_name ?? null,
+      raceId: slot.race.circuit_short_name ?? null,
+      date: slot.race.date_start ? slot.race.date_start.slice(0, 10) : null,
+      qualifyingStart: slot.qualifying?.date_start
+        ? new Date(slot.qualifying.date_start).toISOString()
+        : null,
+      cancelled: slot.race.is_cancelled === true,
+    })
+  }
 
+  if (entries.length === 0) {
+    return { ok: false, reason: "empty", detail: `no race sessions in the ${season} calendar` }
+  }
+
+  entries.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
   return { ok: true, entries }
 }
 
 /**
  * How far our recorded race date may differ from the upstream's and still be
- * the same race. The two feeds disagree by a day on races that straddle
- * midnight UTC (Las Vegas, Azerbaijan). Consecutive races are at least 7 days
- * apart, so this window can only ever match one entry.
+ * the same race. Sessions that straddle midnight UTC shift by a day; races are
+ * at least a week apart, so this window can only match one entry.
  */
 export const MAX_DATE_DRIFT_DAYS = 3
 
@@ -197,12 +201,7 @@ function daysApart(a: string, b: string): number | null {
   return Math.abs(ms) / 86_400_000
 }
 
-/**
- * Finds the upstream calendar entry for one of our races, matching on date
- * rather than round number. Returns null when the upstream calendar has no
- * corresponding race at all, which is a real condition: the feed's 2026
- * calendar omits two races that we list.
- */
+/** Finds the calendar entry for one of our races, matching on date. */
 export function resolveCalendarEntry(
   entries: F1CalendarEntry[],
   raceDate: string | null
@@ -224,103 +223,208 @@ export function resolveCalendarEntry(
 }
 
 /**
- * Rejects a payload describing a different race than the one requested.
- * Without this check a renumbered upstream calendar silently writes one
- * race's results onto another race.
+ * Maps OpenF1 driver numbers to the three-letter acronym for that session.
+ *
+ * Results are keyed by car number, which is not a stable identifier: a wrong
+ * number in our drivers table would quietly attribute a result to the wrong
+ * person. Returning the acronym instead means the sync's existing driver map
+ * (which already indexes short_name) resolves it, and an unknown acronym fails
+ * loudly on the foreign key rather than landing on someone else.
  */
-function checkIdentity(meta: F1RaceMeta, expectDate: string | undefined): string | null {
-  if (!expectDate || !meta.date) return null
-  const drift = daysApart(meta.date, expectDate)
+async function fetchDriverAcronyms(
+  sessionKey: number
+): Promise<{ ok: true; byNumber: Map<number, string> } | Extract<F1Fetch<never>, { ok: false }>> {
+  const fetched = await fetchJson(`${BASE_URL}/drivers?session_key=${sessionKey}`)
+  if (!fetched.ok) return fetched.result
+
+  const rows = fetched.data
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { ok: false, reason: "empty", detail: `no drivers listed for session ${sessionKey}` }
+  }
+
+  const byNumber = new Map<number, string>()
+  for (const d of rows as OpenF1DriverRow[]) {
+    const acronym = d.name_acronym?.trim()
+    if (d.driver_number != null && acronym) byNumber.set(d.driver_number, acronym)
+  }
+
+  if (byNumber.size === 0) {
+    return {
+      ok: false,
+      reason: "empty",
+      detail: `session ${sessionKey} listed drivers but none had an acronym`,
+    }
+  }
+  return { ok: true, byNumber }
+}
+
+/**
+ * The drivers who took part in a session, as OpenF1 lists them.
+ *
+ * The sync uses this to add drivers it has never seen: a mid-season
+ * replacement that is missing from our table otherwise fails the race_results
+ * foreign key and blocks the whole race, which is what happened when Rafael
+ * Camara took the second Haas seat.
+ */
+export async function fetchSessionDrivers(
+  sessionKey: number
+): Promise<{ ok: true; drivers: F1SessionDriver[] } | Extract<F1Fetch<never>, { ok: false }>> {
+  const fetched = await fetchJson(`${BASE_URL}/drivers?session_key=${sessionKey}`)
+  if (!fetched.ok) return fetched.result
+
+  const rows = fetched.data
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { ok: false, reason: "empty", detail: `no drivers listed for session ${sessionKey}` }
+  }
+
+  const seen = new Set<number>()
+  const drivers: F1SessionDriver[] = []
+  for (const d of rows as OpenF1DriverRow[]) {
+    const acronym = d.name_acronym?.trim()
+    if (d.driver_number == null || !acronym || seen.has(d.driver_number)) continue
+    seen.add(d.driver_number)
+    drivers.push({
+      driverNumber: d.driver_number,
+      acronym,
+      firstName: d.first_name?.trim() || null,
+      lastName: d.last_name?.trim() || null,
+      teamName: d.team_name?.trim() || null,
+    })
+  }
+
+  if (drivers.length === 0) {
+    return { ok: false, reason: "empty", detail: `session ${sessionKey} listed no usable drivers` }
+  }
+  return { ok: true, drivers }
+}
+
+function checkDate(entry: F1CalendarEntry, expectDate: string | undefined): string | null {
+  if (!expectDate || !entry.date) return null
+  const drift = daysApart(entry.date, expectDate)
   if (drift !== null && drift <= MAX_DATE_DRIFT_DAYS) return null
-  return `upstream round ${meta.round} is "${meta.raceName ?? "unknown"}" dated ${meta.date}, but ${expectDate} was expected — the upstream calendar has shifted`
+  return `session ${entry.raceSessionKey} is dated ${entry.date}, but ${expectDate} was expected`
 }
 
 export async function fetchRaceResultsDetailed(
-  season: number,
-  round: number,
+  entry: F1CalendarEntry,
   expectDate?: string
 ): Promise<F1Fetch<F1RaceResult>> {
-  const fetched = await fetchJson(`${BASE_URL}/${season}/${round}/race`)
-  if (!fetched.ok) return fetched.result
-
-  const meta = readRaceMeta(fetched.data, round)
-  const mismatch = checkIdentity(meta, expectDate)
+  const mismatch = checkDate(entry, expectDate)
   if (mismatch) return { ok: false, reason: "mismatch", detail: mismatch }
 
-  const data = fetched.data as { races?: { results?: unknown }; results?: unknown }
-  const results = data?.races?.results ?? data?.results ?? []
-  if (!Array.isArray(results) || results.length === 0) {
+  const meta: F1RaceMeta = {
+    sessionKey: entry.raceSessionKey,
+    date: entry.date,
+    raceName: entry.raceName,
+  }
+
+  const drivers = await fetchDriverAcronyms(entry.raceSessionKey)
+  if (!drivers.ok) return drivers
+
+  const fetched = await fetchJson(`${BASE_URL}/session_result?session_key=${entry.raceSessionKey}`)
+  if (!fetched.ok) return fetched.result
+
+  const rows = fetched.data
+  if (!Array.isArray(rows) || rows.length === 0) {
     return {
       ok: false,
       reason: "empty",
-      detail: `no race results in payload (${describeShape(fetched.data)})`,
+      detail: `no classification yet for session ${entry.raceSessionKey}`,
     }
   }
 
-  return {
-    ok: true,
-    meta,
-    data: (results as F1ApiResponse[]).map((r) => ({
-      driverId: r.driverId || r.driver?.driverId || "",
-      position: Number(r.position),
-      points: Number(r.points || 0),
-    })),
+  const results = rows as OpenF1ResultRow[]
+
+  // OpenF1 leaves position null for anyone not classified (retired, not
+  // started, disqualified). race_results.position is NOT NULL and the
+  // leaderboard orders by it, so they are placed after the classified
+  // finishers, most laps completed first. Scoring ignores anything outside the
+  // top ten, so this only affects how the results table reads.
+  const classified = results
+    .filter((r) => r.position != null)
+    .sort((a, b) => (a.position as number) - (b.position as number))
+  const unclassified = results
+    .filter((r) => r.position == null)
+    .sort((a, b) => (b.number_of_laps ?? 0) - (a.number_of_laps ?? 0))
+
+  const data: F1RaceResult[] = []
+  let nextPosition = classified.length
+  for (const row of [...classified, ...unclassified]) {
+    const acronym = drivers.byNumber.get(row.driver_number)
+    if (!acronym) {
+      return {
+        ok: false,
+        reason: "empty",
+        detail: `car #${row.driver_number} finished but is not in the driver list for session ${entry.raceSessionKey}`,
+      }
+    }
+    const position = row.position != null ? Number(row.position) : ++nextPosition
+    data.push({ driverId: acronym, position, points: Number(row.points ?? 0) })
   }
+
+  return { ok: true, data, meta }
 }
 
 export async function fetchQualifyingResultsDetailed(
-  season: number,
-  round: number,
+  entry: F1CalendarEntry,
   expectDate?: string
 ): Promise<F1Fetch<F1QualifyingResult>> {
-  const fetched = await fetchJson(`${BASE_URL}/${season}/${round}/qualy`)
-  if (!fetched.ok) return fetched.result
-
-  const meta = readRaceMeta(fetched.data, round)
-  // The qualifying payload is dated to the race weekend's race day, so the
-  // same identity check applies.
-  const mismatch = checkIdentity(meta, expectDate)
+  const mismatch = checkDate(entry, expectDate)
   if (mismatch) return { ok: false, reason: "mismatch", detail: mismatch }
 
-  const data = fetched.data as {
-    races?: { qualyResults?: unknown; qualifyingResults?: unknown }
-    qualifyingResults?: unknown
-  }
-  const results =
-    data?.races?.qualyResults ?? data?.races?.qualifyingResults ?? data?.qualifyingResults ?? []
-  if (!Array.isArray(results) || results.length === 0) {
+  if (entry.qualifyingSessionKey == null) {
     return {
       ok: false,
       reason: "empty",
-      detail: `no qualifying results in payload (${describeShape(fetched.data)})`,
+      detail: `no qualifying session recorded for the meeting on ${entry.date}`,
     }
   }
 
-  return {
-    ok: true,
-    meta,
-    data: (results as F1ApiResponse[]).map((r) => ({
-      driverId: r.driverId || r.driver?.driverId || "",
-      gridPosition: Number(r.position || r.gridPosition || 0),
-    })),
+  const sessionKey = entry.qualifyingSessionKey
+  const meta: F1RaceMeta = { sessionKey, date: entry.date, raceName: entry.raceName }
+
+  const drivers = await fetchDriverAcronyms(sessionKey)
+  if (!drivers.ok) return drivers
+
+  const fetched = await fetchJson(`${BASE_URL}/session_result?session_key=${sessionKey}`)
+  if (!fetched.ok) return fetched.result
+
+  const rows = fetched.data
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { ok: false, reason: "empty", detail: `no qualifying classification for ${sessionKey}` }
   }
+
+  // Grid penalties are applied after qualifying and OpenF1 has no starting_grid
+  // for these sessions, so this is the qualifying order, not the grid as it
+  // formed up. Pole is read from it, which is what the pole prediction scores.
+  const data: F1QualifyingResult[] = []
+  for (const row of rows as OpenF1ResultRow[]) {
+    if (row.position == null) continue
+    const acronym = drivers.byNumber.get(row.driver_number)
+    if (!acronym) continue
+    data.push({ driverId: acronym, gridPosition: Number(row.position) })
+  }
+
+  if (data.length === 0) {
+    return { ok: false, reason: "empty", detail: `qualifying session ${sessionKey} had no positions` }
+  }
+
+  data.sort((a, b) => a.gridPosition - b.gridPosition)
+  return { ok: true, data, meta }
 }
 
+/**
+ * OpenF1 publishes timing, not championship tables: it has no standings
+ * endpoint, and summing points across every race session of the year would be
+ * one request per round on a page load.
+ *
+ * Returning null is deliberate. The WDC page already prefers live standings
+ * and falls back to totalling points from our own race_results, so it now
+ * always takes that path — which is also the more honest number, since it
+ * reflects exactly the results the league has been scored on.
+ */
 export async function fetchDriverStandings(
-  season: number
+  _season: number
 ): Promise<Array<{ driverId: string; position: number; points: number }> | null> {
-  const fetched = await fetchJson(`${BASE_URL}/${season}/drivers-championship`)
-  if (!fetched.ok) return null
-
-  const data = fetched.data as {
-    drivers_championship?: unknown
-    standingsLists?: Array<{ driverStandings?: unknown }>
-  }
-  const standings = data?.drivers_championship ?? data?.standingsLists?.[0]?.driverStandings ?? []
-  if (!Array.isArray(standings) || standings.length === 0) return null
-  return (standings as F1ApiResponse[]).map((s) => ({
-    driverId: s.driverId || s.driver?.driverId || "",
-    position: Number(s.position),
-    points: Number(s.points || 0),
-  }))
+  return null
 }

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="252" height="48" viewBox="0 0 252 48" role="img" aria-label="Grid Prophets">
+  <!--
+    Horizontal lockup: mark + wordmark.
+
+    The wordmark is live text in Geist, the app's own typeface, so it matches
+    headings wherever Geist is loaded. Opened standalone, or anywhere Geist is
+    absent, it falls back down the stack below and the spacing shifts slightly.
+    If you need a version that can never substitute (print, a third-party site,
+    a social card), ask and I will convert the wordmark to outlines.
+
+    "GRID" follows the colour scheme the way public/icon.svg already did in this
+    repo; "PROPHETS" is always --f1-red.
+  -->
+  <style>
+    .wordmark { fill: #f2f2f2; }
+    @media (prefers-color-scheme: light) { .wordmark { fill: #0e0f12; } }
+  </style>
+
+  <g transform="translate(4 4) scale(1.25)">
+    <rect x="0.5" y="0.5" width="31" height="31" rx="7" fill="#0e0f12" stroke="#262a33" stroke-width="0.8" />
+    <g transform="skewX(-18)">
+      <rect x="12"   y="8"    width="16" height="4.2" rx="2.1" fill="#fd122e" />
+      <rect x="10.5" y="14.1" width="12" height="4.2" rx="2.1" fill="#f2f2f2" />
+      <rect x="9"    y="20.2" width="8"  height="4.2" rx="2.1" fill="#f2f2f2" opacity="0.5" />
+    </g>
+  </g>
+
+  <text x="58" y="31"
+        font-family="Geist, 'Geist Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+        font-size="20" font-weight="600" letter-spacing="1.6">
+    <tspan class="wordmark">GRID</tspan><tspan dx="7" fill="#fd122e">PROPHETS</tspan>
+  </text>
+</svg>

@@ -56,13 +56,13 @@ export async function POST(request: Request) {
   }
 
   // Verifying the date guards against writing another race's results.
-  const outcome = await fetchRaceResultsDetailed(SEASON, entry.round, race.race_date)
+  const outcome = await fetchRaceResultsDetailed(entry, race.race_date)
   if (!outcome.ok) {
     return NextResponse.json(
       {
         error: `No usable results from F1 API for this race: ${outcome.detail}`,
         round,
-        upstreamRound: entry.round,
+        upstreamSession: entry.raceSessionKey,
       },
       { status: outcome.reason === "empty" ? 404 : 502 }
     )
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     success: true,
-    message: `Reprocessed "${race.race_name}" (our round ${round}, upstream round ${entry.round}) with ${raceResults.length} results`,
+    message: `Reprocessed "${race.race_name}" (our round ${round}, upstream session ${entry.raceSessionKey}) with ${raceResults.length} results`,
     results: raceResults.length
   })
 }

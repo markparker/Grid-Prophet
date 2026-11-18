@@ -1,0 +1,69 @@
+name: Sync race results
+
+# Runs POST /api/f1/sync on a schedule so results, schedule repairs and new
+# drivers land without anyone pressing the button.
+#
+# Why here rather than Vercel Cron: this project is on the Hobby plan, which
+# allows two cron jobs and only daily granularity, so "four hours after this
+# particular race" is not expressible there. GitHub Actions takes an arbitrary
+# cron and the job is a single curl.
+#
+# All times are UTC. GitHub can start a scheduled run late when the service is
+# busy, occasionally by a good few minutes; the post-race runs are four hours
+# after the flag precisely so that slippage does not matter.
+
+on:
+  schedule:
+    # Daily safety net. Catches anything the post-race run missed and applies
+    # schedule repairs (dates, qualifying times) ahead of the next weekend.
+    # Offset from the hour because scheduled jobs bunch up on :00.
+    - cron: "17 6 * * *"
+
+    # Four hours after each remaining 2026 race ends. These are one-shot dates
+    # and will need regenerating for 2027 — the daily run above is what keeps
+    # things correct if they are ever forgotten.
+    - cron: "0 10 22 11 *" # Las Vegas, race ends 22 Nov 06:00Z
+    - cron: "0 22 29 11 *" # Qatar,     race ends 29 Nov 18:00Z
+    - cron: "0 19 6 12 *" # Abu Dhabi, race ends  6 Dec 15:00Z
+
+  # So a sync can be forced from the Actions tab without waiting for a slot.
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger results sync
+        run: |
+          set -euo pipefail
+
+          response=$(curl -sS --max-time 120 -X POST \
+            -H 'Content-Type: application/json' \
+            -w '\n%{http_code}' \
+            https://www.gridprophets.com/api/f1/sync)
+
+          status=$(printf '%s' "$response" | tail -n1)
+          body=$(printf '%s' "$response" | sed '$d')
+
+          echo "HTTP $status"
+          echo "$body" | jq . 2>/dev/null || echo "$body"
+
+          # Put the outcome on the run summary so a failure is readable without
+          # opening the log.
+          {
+            echo "### Results sync"
+            echo
+            echo "HTTP \`$status\`"
+            echo
+            echo '```json'
+            echo "$body" | jq . 2>/dev/null || echo "$body"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # 502 means the timing feed is unreachable, which is worth a red run:
+          # that is how the f1api.dev outage went unnoticed for ten days.
+          if [ "$status" != "200" ]; then
+            echo "::error::Results sync failed with HTTP $status"
+            exit 1
+          fi
