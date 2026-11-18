@@ -64,7 +64,7 @@ function scheduleDrift(stored: StoredRace[], entries: F1CalendarEntry[]) {
   for (const race of stored) {
     const entry = resolveCalendarEntry(entries, race.race_date)
     if (entry) {
-      matched.add(entry.round)
+      matched.add(entry.raceSessionKey)
       if (entry.date && entry.date !== race.race_date) {
         drift.push({
           round: race.round,
@@ -133,10 +133,10 @@ function scheduleDrift(stored: StoredRace[], entries: F1CalendarEntry[]) {
   // Upstream races we have no row for at all, including ones that reappeared
   // on a new date after being postponed.
   for (const entry of entries) {
-    if (matched.has(entry.round)) continue
+    if (matched.has(entry.raceSessionKey)) continue
     drift.push({
       round: null,
-      name: entry.raceName ?? entry.raceId ?? `upstream round ${entry.round}`,
+      name: entry.raceName ?? entry.raceId ?? `upstream session ${entry.raceSessionKey}`,
       issue: "in the upstream calendar but missing from our schedule",
       ours: null,
       upstream: entry.date,
@@ -188,21 +188,21 @@ export async function GET() {
         round: race.round,
         name: race.race_name,
         raceDate: race.race_date,
-        upstreamRound: null,
+        upstreamSession: null,
         problem: NOT_IN_CALENDAR,
       })
       continue
     }
 
     const [raceOutcome, qualyOutcome] = await Promise.all([
-      fetchRaceResultsDetailed(SEASON, entry.round, race.race_date),
-      fetchQualifyingResultsDetailed(SEASON, entry.round, race.race_date),
+      fetchRaceResultsDetailed(entry, race.race_date),
+      fetchQualifyingResultsDetailed(entry, race.race_date),
     ])
     probes.push({
       round: race.round,
       name: race.race_name,
       raceDate: race.race_date,
-      upstreamRound: entry.round,
+      upstreamSession: entry.raceSessionKey,
       race: raceOutcome.ok
         ? { ok: true, count: raceOutcome.data.length }
         : { ok: false, problem: describeFailure(raceOutcome) },
@@ -260,7 +260,7 @@ export async function POST() {
   const checked: Array<{
     round: number
     name: string
-    upstreamRound: number | null
+    upstreamSession: number | null
     qualyFetched: boolean
     resultsFetched: boolean
     apiHasResults: boolean
@@ -278,7 +278,7 @@ export async function POST() {
       checked.push({
         round: race.round,
         name: race.race_name,
-        upstreamRound: null,
+        upstreamSession: null,
         qualyFetched: race.qualifying_fetched,
         resultsFetched: false,
         apiHasResults: false,
@@ -289,11 +289,7 @@ export async function POST() {
 
     // Fetch qualifying results
     if (!race.qualifying_fetched) {
-      const qualyOutcome = await fetchQualifyingResultsDetailed(
-        SEASON,
-        entry.round,
-        race.race_date
-      )
+      const qualyOutcome = await fetchQualifyingResultsDetailed(entry, race.race_date)
       const qualyResults = qualyOutcome.ok ? qualyOutcome.data : null
       if (qualyResults && qualyResults.length > 0) {
         // Map F1 API driver IDs to our driver IDs
@@ -326,7 +322,7 @@ export async function POST() {
     }
 
     // Fetch race results
-    const raceOutcome = await fetchRaceResultsDetailed(SEASON, entry.round, race.race_date)
+    const raceOutcome = await fetchRaceResultsDetailed(entry, race.race_date)
     const raceResults = raceOutcome.ok ? raceOutcome.data : null
     apiHasResults = !!(raceResults && raceResults.length > 0)
     if (!raceOutcome.ok) problem = describeFailure(raceOutcome)
@@ -366,7 +362,7 @@ export async function POST() {
     checked.push({
       round: race.round,
       name: race.race_name,
-      upstreamRound: entry.round,
+      upstreamSession: entry.raceSessionKey,
       qualyFetched: race.qualifying_fetched || qualyFetchedThisRun,
       resultsFetched: apiHasResults,
       apiHasResults,
