@@ -72,6 +72,18 @@ interface OpenF1DriverRow {
   driver_number: number
   name_acronym?: string
   full_name?: string
+  first_name?: string
+  last_name?: string
+  team_name?: string
+}
+
+/** A driver as OpenF1 described them for one session. */
+export interface F1SessionDriver {
+  driverNumber: number
+  acronym: string
+  firstName: string | null
+  lastName: string | null
+  teamName: string | null
 }
 
 async function fetchJson(
@@ -244,6 +256,46 @@ async function fetchDriverAcronyms(
     }
   }
   return { ok: true, byNumber }
+}
+
+/**
+ * The drivers who took part in a session, as OpenF1 lists them.
+ *
+ * The sync uses this to add drivers it has never seen: a mid-season
+ * replacement that is missing from our table otherwise fails the race_results
+ * foreign key and blocks the whole race, which is what happened when Rafael
+ * Camara took the second Haas seat.
+ */
+export async function fetchSessionDrivers(
+  sessionKey: number
+): Promise<{ ok: true; drivers: F1SessionDriver[] } | Extract<F1Fetch<never>, { ok: false }>> {
+  const fetched = await fetchJson(`${BASE_URL}/drivers?session_key=${sessionKey}`)
+  if (!fetched.ok) return fetched.result
+
+  const rows = fetched.data
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { ok: false, reason: "empty", detail: `no drivers listed for session ${sessionKey}` }
+  }
+
+  const seen = new Set<number>()
+  const drivers: F1SessionDriver[] = []
+  for (const d of rows as OpenF1DriverRow[]) {
+    const acronym = d.name_acronym?.trim()
+    if (d.driver_number == null || !acronym || seen.has(d.driver_number)) continue
+    seen.add(d.driver_number)
+    drivers.push({
+      driverNumber: d.driver_number,
+      acronym,
+      firstName: d.first_name?.trim() || null,
+      lastName: d.last_name?.trim() || null,
+      teamName: d.team_name?.trim() || null,
+    })
+  }
+
+  if (drivers.length === 0) {
+    return { ok: false, reason: "empty", detail: `session ${sessionKey} listed no usable drivers` }
+  }
+  return { ok: true, drivers }
 }
 
 function checkDate(entry: F1CalendarEntry, expectDate: string | undefined): string | null {

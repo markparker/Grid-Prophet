@@ -4,6 +4,7 @@ import {
   fetchRaceResultsDetailed,
   fetchQualifyingResultsDetailed,
   fetchSeasonCalendar,
+  fetchSessionDrivers,
   resolveCalendarEntry,
   type F1Fetch,
   type F1CalendarEntry,
@@ -146,6 +147,157 @@ function scheduleDrift(stored: StoredRace[], entries: F1CalendarEntry[]) {
   return drift
 }
 
+interface ScheduleRepair {
+  round: number
+  name: string
+  change: string
+  from: string | null
+  to: string | null
+}
+
+/** Strips accents and punctuation so a name becomes one of our driver ids. */
+function slugify(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+}
+
+/**
+ * Brings our calendar back in line with the upstream one.
+ *
+ * Applied rather than only reported, because every drift so far has been
+ * silent and costly: the Mexico qualifying time was three hours out and locked
+ * the league before the session began, and the Las Vegas one was eighteen
+ * hours late, which would have let people predict pole after watching it.
+ *
+ * Dates and session times are corrected, and a race the feed marks cancelled is
+ * cancelled here. The reverse is deliberately not automatic: un-cancelling
+ * would resurrect a race somebody hid on purpose, so that is reported instead.
+ */
+async function repairSchedule(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  entries: F1CalendarEntry[]
+): Promise<ScheduleRepair[]> {
+  const { data: races } = await supabase
+    .from("races")
+    .select("id, round, race_name, race_date, qualifying_date, status")
+
+  const repairs: ScheduleRepair[] = []
+  const toleranceMs = QUALIFYING_DRIFT_TOLERANCE_MINUTES * 60_000
+
+  for (const race of races || []) {
+    const entry = resolveCalendarEntry(entries, race.race_date)
+    if (!entry) continue
+
+    const patch: Record<string, unknown> = {}
+
+    if (entry.date && entry.date !== race.race_date) {
+      patch.race_date = entry.date
+      repairs.push({
+        round: race.round,
+        name: race.race_name,
+        change: "race date",
+        from: race.race_date,
+        to: entry.date,
+      })
+    }
+
+    if (entry.qualifyingStart) {
+      const ours = race.qualifying_date ? new Date(race.qualifying_date).getTime() : null
+      const theirs = new Date(entry.qualifyingStart).getTime()
+      if (ours === null || Math.abs(theirs - ours) > toleranceMs) {
+        patch.qualifying_date = entry.qualifyingStart
+        repairs.push({
+          round: race.round,
+          name: race.race_name,
+          change: "qualifying time (predictions lock on this)",
+          from: race.qualifying_date,
+          to: entry.qualifyingStart,
+        })
+      }
+    }
+
+    if (entry.cancelled && race.status !== "canceled") {
+      patch.status = "canceled"
+      repairs.push({
+        round: race.round,
+        name: race.race_name,
+        change: "status",
+        from: race.status,
+        to: "canceled",
+      })
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await supabase.from("races").update(patch).eq("id", race.id)
+    }
+  }
+
+  return repairs
+}
+
+/**
+ * Adds any driver who appeared in the session but is missing from our table.
+ *
+ * race_results.driver_id is a foreign key, so an unknown driver does not just
+ * skip a row, it fails the whole race. A mid-season replacement is exactly
+ * when that bites: Rafael Camara taking the second Haas seat blocked the
+ * Brazilian GP entirely until he was added by hand.
+ */
+async function ensureDriversExist(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sessionKey: number
+): Promise<{ added: string[]; problem?: string }> {
+  const session = await fetchSessionDrivers(sessionKey)
+  if (!session.ok) return { added: [], problem: describeFailure(session) }
+
+  const { data: existing } = await supabase
+    .from("drivers")
+    .select("id, short_name, team_id, team_name")
+
+  const known = new Set((existing || []).map((d) => (d.short_name || "").toUpperCase()))
+
+  // Reuse our own team ids where the names line up, so a new driver lands on
+  // the same team as their team-mate rather than inventing a second id for it.
+  const teams = new Map<string, string>()
+  for (const d of existing || []) {
+    if (d.team_name && d.team_id) teams.set(slugify(d.team_name), d.team_id)
+  }
+  const resolveTeamId = (teamName: string | null): string => {
+    if (!teamName) return "unknown"
+    const slug = slugify(teamName)
+    for (const [knownSlug, id] of teams) {
+      if (slug === knownSlug || slug.startsWith(knownSlug) || knownSlug.startsWith(slug)) return id
+    }
+    return slug
+  }
+
+  const added: string[] = []
+  for (const d of session.drivers) {
+    if (known.has(d.acronym.toUpperCase())) continue
+
+    const first = d.firstName ?? d.acronym
+    const last = d.lastName ?? d.acronym
+    const row = {
+      id: slugify(`${first} ${last}`),
+      name: first,
+      surname: last,
+      short_name: d.acronym.toUpperCase(),
+      number: d.driverNumber,
+      team_id: resolveTeamId(d.teamName),
+      team_name: d.teamName ?? "Unknown",
+    }
+
+    const { error } = await supabase.from("drivers").insert(row)
+    if (!error) added.push(`${row.short_name} (${row.name} ${row.surname}, #${row.number})`)
+  }
+
+  return { added }
+}
+
 /**
  * Dry-run probe. Reports exactly what the upstream F1 API returns for every
  * race that is due a sync, plus any drift between our calendar and the
@@ -225,23 +377,7 @@ export async function GET() {
 export async function POST() {
   const supabase = await createClient()
 
-  // Get all races that have passed but don't have results yet
   const today = new Date().toISOString().split("T")[0]
-  const { data: pendingRaces } = await supabase
-    .from("races")
-    .select("*")
-    .lte("race_date", today)
-    .eq("results_fetched", false)
-    .order("round", { ascending: true })
-
-  if (!pendingRaces || pendingRaces.length === 0) {
-    return NextResponse.json({ 
-      message: "No pending races to sync", 
-      synced: 0,
-      checked: [],
-      today
-    })
-  }
 
   const calendar = await fetchSeasonCalendar(SEASON)
   if (!calendar.ok) {
@@ -249,6 +385,7 @@ export async function POST() {
       {
         message: `Could not load the upstream season calendar: ${describeFailure(calendar)}`,
         synced: 0,
+        repaired: [],
         checked: [],
         today,
       },
@@ -256,7 +393,33 @@ export async function POST() {
     )
   }
 
+  // Repair before deciding what is pending: correcting a race date can change
+  // which races have been run, and correcting a qualifying time changes when
+  // predictions lock, which is the more urgent of the two.
+  const repaired = await repairSchedule(supabase, calendar.entries)
+
+  const { data: pendingRaces } = await supabase
+    .from("races")
+    .select("*")
+    .lte("race_date", today)
+    .eq("results_fetched", false)
+    .neq("status", "canceled")
+    .order("round", { ascending: true })
+
+  if (!pendingRaces || pendingRaces.length === 0) {
+    return NextResponse.json({
+      message: repaired.length
+        ? `No pending races to sync. Repaired ${repaired.length} schedule issue(s).`
+        : "No pending races to sync",
+      synced: 0,
+      repaired,
+      checked: [],
+      today,
+    })
+  }
+
   let synced = 0
+  const driversAdded: string[] = []
   const checked: Array<{
     round: number
     name: string
@@ -286,6 +449,11 @@ export async function POST() {
       })
       continue
     }
+
+    // Add anyone new on the grid before writing results that reference them.
+    const driverCheck = await ensureDriversExist(supabase, entry.raceSessionKey)
+    driversAdded.push(...driverCheck.added)
+    if (driverCheck.problem) problem = driverCheck.problem
 
     // Fetch qualifying results
     if (!race.qualifying_fetched) {
@@ -380,10 +548,16 @@ export async function POST() {
       .map((f) => `Round ${f.round} (${f.name}): ${f.problem}`)
       .join(" | ")}`
   } else {
-    message = `Checked ${checked.length} race(s) but F1 API has no results yet. Results typically appear 1-2 hours after race ends.`
+    message = `Checked ${checked.length} race(s) but the timing feed has no classification yet. Results usually appear within a couple of hours of the flag.`
   }
 
-  return NextResponse.json({ message, synced, checked, today })
+  // Repairs happen whether or not anything synced, so report them either way.
+  const notes: string[] = []
+  if (repaired.length > 0) notes.push(`repaired ${repaired.length} schedule issue(s)`)
+  if (driversAdded.length > 0) notes.push(`added ${driversAdded.length} driver(s): ${driversAdded.join(", ")}`)
+  if (notes.length > 0) message += ` — ${notes.join("; ")}.`
+
+  return NextResponse.json({ message, synced, repaired, driversAdded, checked, today })
 }
 
 function createDriverMap(
